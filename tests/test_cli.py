@@ -1,0 +1,307 @@
+"""Tests for CLI parsing and command dispatch."""
+
+from __future__ import annotations
+
+import io
+import sys
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.cli import build_parser
+from app.main import main, run_pdf_analysis_details
+from src.parser.document_parser import PDFMalformedError
+
+
+class CLITestCase(unittest.TestCase):
+    """Validate CLI parsing and high-level command behavior."""
+
+    def test_cli_parses_scan_command(self) -> None:
+        """Ensure the scan subcommand accepts a required file path."""
+        parser = build_parser()
+        args = parser.parse_args(["scan", "--file", "sample.pdf"])
+
+        self.assertEqual(args.command, "scan")
+        self.assertEqual(str(args.file_path), "sample.pdf")
+
+    def test_cli_parses_scan_folder_command(self) -> None:
+        """Ensure the scan-folder subcommand accepts folder and full flag."""
+        parser = build_parser()
+        args = parser.parse_args(["scan-folder", "--dir", "samples", "--full"])
+
+        self.assertEqual(args.command, "scan-folder")
+        self.assertEqual(str(args.directory), "samples")
+        self.assertTrue(args.full)
+
+    def test_cli_parses_train_command(self) -> None:
+        """Ensure the train subcommand accepts a CSV path."""
+        parser = build_parser()
+        args = parser.parse_args(["train", "--csv", "features.csv"])
+
+        self.assertEqual(args.command, "train")
+        self.assertEqual(str(args.csv_path), "features.csv")
+
+    def test_main_scan_prints_console_summary(self) -> None:
+        """Run the scan command and print the formatted summary."""
+        summary = {
+            "file_name": "sample.pdf",
+            "file_path": "C:/analysis/sample.pdf",
+            "final_label": "suspicious",
+            "final_confidence": 0.71,
+            "rule_score": 56.0,
+            "rule_severity": "high",
+            "ml_label": "suspicious",
+            "ml_confidence": 0.71,
+            "suspicious_indicators_found": ["/Launch (1)"],
+            "triggered_rules": ["launch-action-present"],
+            "explanations": ["Launch action detected."],
+        }
+
+        stdout = io.StringIO()
+        with patch.object(Path, "exists", return_value=True), patch.object(
+            Path, "is_file", return_value=True
+        ), patch(
+            "app.main.load_saved_model",
+            return_value=MagicMock(),
+        ), patch(
+            "app.main.run_pdf_analysis",
+            return_value=summary,
+        ), patch(
+            "app.main.summary_to_console_text",
+            return_value="SCAN SUMMARY",
+        ), redirect_stdout(stdout):
+            exit_code = main(["scan", "--file", "sample.pdf"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("SCAN SUMMARY", stdout.getvalue())
+
+    def test_main_scan_folder_prints_short_result_line_per_pdf(self) -> None:
+        """Run the scan-folder command and print one short line per PDF."""
+        summaries = {
+            "a.pdf": {
+                "file_name": "a.pdf",
+                "final_label": "benign",
+                "final_confidence": 0.92,
+                "rule_severity": "low",
+            },
+            "b.PDF": {
+                "file_name": "b.PDF",
+                "final_label": "suspicious",
+                "final_confidence": 0.67,
+                "rule_severity": "medium",
+            },
+        }
+
+        def fake_run_pdf_analysis(pdf_path: Path, classifier: object) -> dict[str, object]:
+            _ = classifier
+            return summaries[pdf_path.name]
+
+        stdout = io.StringIO()
+        directory = Path("samples")
+        pdf_files = [Path("a.pdf"), Path("b.PDF"), Path("notes.txt")]
+
+        with patch.object(Path, "exists", return_value=True), patch.object(
+            Path, "is_dir", return_value=True
+        ), patch.object(
+            Path,
+            "iterdir",
+            return_value=pdf_files,
+        ), patch.object(
+            Path,
+            "is_file",
+            new=lambda self: self.suffix != "",
+        ), patch(
+            "app.main.load_saved_model",
+            return_value=MagicMock(),
+        ), patch(
+            "app.main.run_pdf_analysis",
+            side_effect=fake_run_pdf_analysis,
+        ), redirect_stdout(stdout):
+            exit_code = main(["scan-folder", "--dir", str(directory)])
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("a.pdf | final=benign | confidence=0.92 | rule=low", output)
+        self.assertIn("b.PDF | final=suspicious | confidence=0.67 | rule=medium", output)
+        self.assertNotIn("notes.txt", output)
+
+    def test_main_train_prints_training_summary(self) -> None:
+        """Run the train command and print readable training output."""
+        training_result = {
+            "dataset_row_count": 2400,
+            "class_distribution": {
+                "benign": 1600,
+                "malicious": 500,
+                "suspicious": 300,
+            },
+            "target_column": "label",
+            "recommended_baseline": "random_forest",
+            "best_model_name": "random_forest",
+            "model_path": "models/best_model.joblib",
+            "feature_columns_path": "models/feature_columns.json",
+            "metrics_summary_path": "models/reports/metrics_summary.json",
+            "confusion_matrix_path": "models/reports/best_model_confusion_matrix.png",
+            "model_comparison_path": "models/reports/model_f1_comparison.png",
+            "reports_dir": "models/reports",
+            "best_model_metrics": {
+                "accuracy": 0.91,
+                "precision": 0.90,
+                "recall": 0.89,
+                "f1_score": 0.90,
+                "classification_report": "classification report",
+            },
+            "all_model_metrics": {
+                "random_forest": {"f1_score": 0.90},
+                "gradient_boosting": {"f1_score": 0.82},
+                "logistic_regression": {"f1_score": 0.78},
+            },
+        }
+
+        stdout = io.StringIO()
+        with patch("app.main.train_from_csv", return_value=training_result), redirect_stdout(stdout):
+            exit_code = main(["train", "--csv", "features.csv"])
+
+        output = stdout.getvalue()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Training completed successfully.", output)
+        self.assertIn("Dataset rows: 2400", output)
+        self.assertIn("Class distribution:", output)
+        self.assertIn("benign: 1600", output)
+        self.assertIn("Best selected model: random_forest", output)
+        self.assertIn("Saved model path: models/best_model.joblib", output)
+        self.assertIn("Saved metrics/report path: models/reports/metrics_summary.json", output)
+        self.assertIn("Confusion matrix chart: models/reports/best_model_confusion_matrix.png", output)
+        self.assertIn("Model comparison chart: models/reports/model_f1_comparison.png", output)
+        self.assertIn("Saved reports directory: models/reports", output)
+        self.assertIn("- random_forest: 0.900", output)
+
+    def test_main_train_reports_missing_csv_cleanly(self) -> None:
+        """Return a readable error when the training CSV path does not exist."""
+        stderr = io.StringIO()
+
+        with redirect_stderr(stderr):
+            exit_code = main(["train", "--csv", "missing.csv"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Dataset CSV file not found", stderr.getvalue())
+
+    def test_main_returns_error_for_missing_model(self) -> None:
+        """Report model-loading errors cleanly to stderr."""
+        stderr = io.StringIO()
+        with patch.object(Path, "exists", return_value=True), patch.object(
+            Path, "is_file", return_value=True
+        ), patch(
+            "app.main.load_saved_model",
+            side_effect=FileNotFoundError("Model file not found: models/best_model.joblib"),
+        ), redirect_stderr(stderr):
+            exit_code = main(["scan", "--file", "sample.pdf"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Error: Model file not found", stderr.getvalue())
+
+    def test_run_pdf_analysis_details_falls_back_for_malformed_pdf(self) -> None:
+        """Return a conservative suspicious result when parsing fails."""
+        parser_output = {
+            "file_name": "broken.pdf",
+            "file_path": "C:/analysis/broken.pdf",
+            "file_size": 128,
+            "page_count": 0,
+            "is_encrypted": False,
+            "metadata_fields_present": [],
+            "metadata_field_count": 0,
+            "suspicious_keyword_counts": {
+                "/JavaScript": 1,
+                "/JS": 0,
+                "/OpenAction": 1,
+                "/AA": 0,
+                "/Launch": 0,
+                "/URI": 0,
+                "/EmbeddedFile": 0,
+                "/Encrypt": 0,
+                "/ObjStm": 0,
+                "/RichMedia": 0,
+                "/AcroForm": 0,
+            },
+            "suspicious_keyword_total": 2,
+        }
+        features = {
+            "file_size": 128,
+            "page_count": 0,
+            "metadata_field_count": 0,
+            "suspicious_keyword_total": 2,
+            "is_encrypted": False,
+            "has_javascript": True,
+            "has_js": False,
+            "has_openaction": True,
+            "has_aa": False,
+            "has_launch": False,
+            "has_uri": False,
+            "has_embeddedfile": False,
+            "has_encrypt": False,
+            "has_objstm": False,
+            "has_richmedia": False,
+            "has_acroform": False,
+            "javascript_count": 1,
+            "js_count": 0,
+            "openaction_count": 1,
+            "aa_count": 0,
+            "launch_count": 0,
+            "uri_count": 0,
+            "embeddedfile_count": 0,
+            "encrypt_count": 0,
+            "objstm_count": 0,
+            "richmedia_count": 0,
+            "acroform_count": 0,
+            "action_keyword_total": 1,
+            "embedded_or_script_total": 1,
+            "stream_like_keyword_total": 0,
+            "high_risk_keyword_total": 2,
+            "keyword_density_per_page": 2.0,
+        }
+        rule_result = {
+            "risk_score_raw": 0,
+            "risk_score_normalized": 0,
+            "severity": "low",
+            "triggered_rules": [],
+            "explanations": [],
+        }
+        fake_classifier = MagicMock()
+        fake_classifier.predict.return_value = MagicMock(
+            predicted_label="malicious",
+            confidence=0.62,
+            class_probabilities={"malicious": 0.62, "benign": 0.38},
+        )
+        parser_instance = MagicMock()
+        parser_instance.parse.side_effect = PDFMalformedError("Malformed or unreadable PDF: broken.pdf")
+        parser_instance.read_raw_indicators.return_value = parser_output
+
+        with patch("app.main.PDFParser", return_value=parser_instance), patch(
+            "app.main.PDFFeatureExtractor"
+        ) as extractor_class, patch(
+            "app.main.RuleEngine"
+        ) as rule_engine_class, patch(
+            "app.main.HybridDecisionLayer"
+        ) as fusion_class:
+            extractor_class.return_value.extract.return_value = features
+            rule_engine_class.return_value.evaluate.return_value = rule_result
+
+            result = run_pdf_analysis_details(Path("broken.pdf"), fake_classifier)
+
+        summary = result["summary"]
+        self.assertEqual(summary["final_label"], "suspicious")
+        self.assertGreaterEqual(summary["final_confidence"], 0.55)
+        self.assertEqual(summary["rule_severity"], "medium")
+        self.assertIn("unreadable-pdf", summary["triggered_rules"])
+        self.assertTrue(
+            any("could not be fully parsed" in explanation for explanation in summary["explanations"])
+        )
+        fusion_class.return_value.combine.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()

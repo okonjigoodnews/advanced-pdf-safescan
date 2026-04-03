@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Advanced PDFSafeScan</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <section class="hero-panel">
+        <div class="hero-badge">Browser PDF Protection</div>
+        <h1>Advanced PDFSafeScan</h1>
+        <p>Scan suspicious PDF links with your local analyst API before you trust them.</p>
+      </section>
+
+      <section class="status-panel">
+        <div class="status-line">
+          <span class="status-label">Backend</span>
+          <span id="backend-status" class="status-pill status-pill-offline">Checking</span>
+        </div>
+        <div class="status-line">
+          <span class="status-label">Latest Verdict</span>
+          <span id="latest-verdict-badge" class="verdict-badge verdict-failed">No scans yet</span>
+        </div>
+      </section>
+
+      <section class="result-panel">
+        <div class="result-header">
+          <div>
+            <h2>Latest Scan Result</h2>
+            <p id="result-file" class="muted">Right-click a PDF link to scan it.</p>
+          </div>
+          <div id="result-state" class="state-chip">Idle</div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-label">Confidence</span>
+            <span id="metric-confidence" class="metric-value">0.00</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Rule Score</span>
+            <span id="metric-rule-score" class="metric-value">0.00</span>
+          </div>
+        </div>
+
+        <p id="result-recommendation" class="recommendation">
+          Use the context menu on a PDF link or scan the current PDF page from this popup.
+        </p>
+      </section>
+
+      <section class="button-grid">
+        <button id="scan-current-tab" class="primary-button">Scan Current PDF</button>
+        <button id="open-dashboard" class="secondary-button">Open Dashboard</button>
+        <button id="open-settings" class="secondary-button">Open Settings</button>
+      </section>
+
+      <section class="recent-panel">
+        <div class="recent-header">
+          <h2>Recent Scans</h2>
+          <button id="refresh-recent" class="inline-button">Refresh</button>
+        </div>
+        <ul id="recent-scan-list" class="recent-list">
+          <li class="empty-state">No recent scans available.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

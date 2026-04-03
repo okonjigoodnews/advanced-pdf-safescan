@@ -1,0 +1,142 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.16), transparent 28%),
+    linear-gradient(160deg, #04101d 0%, #071726 42%, #091c2f 100%);
+  color: #eff6ff;
+}
+
+.settings-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+.settings-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(9, 18, 34, 0.9);
+  box-shadow: 0 24px 48px rgba(2, 6, 23, 0.28);
+}
+
+.settings-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 1rem;
+  right: 1rem;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.12), rgba(96, 165, 250, 0.92), rgba(139, 92, 246, 0.16));
+}
+
+.header-badge {
+  display: inline-flex;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  margin-top: 0.72rem;
+  font-size: 1.68rem;
+}
+
+.settings-panel > p {
+  margin-top: 0.5rem;
+  color: #9fb6d6;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.4rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+label span {
+  color: #dbeafe;
+  font-weight: 600;
+}
+
+input[type="url"],
+input[type="password"] {
+  width: 100%;
+  padding: 0.82rem 0.95rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  background: rgba(7, 16, 30, 0.86);
+  color: #eff6ff;
+}
+
+.toggle-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: 0.95rem;
+  background: rgba(6, 14, 28, 0.76);
+  border: 1px solid rgba(96, 165, 250, 0.12);
+}
+
+.toggle-row input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.85rem;
+}
+
+.primary-button,
+.secondary-button {
+  flex: 1;
+  border: none;
+  cursor: pointer;
+  border-radius: 0.95rem;
+  padding: 0.86rem 1rem;
+  font: inherit;
+  font-weight: 700;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #2563eb 0%, #22d3ee 100%);
+  color: white;
+}
+
+.secondary-button {
+  background: rgba(15, 23, 42, 0.96);
+  color: #eff6ff;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+}
+
+.save-status {
+  margin-top: 1rem;
+  color: #93c5fd;
+}

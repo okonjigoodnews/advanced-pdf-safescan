@@ -1,0 +1,623 @@
+"""Tests for the Streamlit UI helper functions."""
+
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.ui_streamlit import (
+    _build_batch_summary_rows,
+    _build_confidence_chart_rows,
+    _build_dashboard_table_rows,
+    _build_hero_html,
+    _build_high_risk_table_rows,
+    _build_history_trend_rows,
+    _build_live_status_strip_html,
+    _build_live_status_summary,
+    _build_scan_history_table_rows,
+    _build_score_chart_rows,
+    _build_sticky_verdict_bar_html,
+    _build_upload_signature,
+    _build_verdict_distribution_rows,
+    _count_verdicts,
+    _is_pdf_filename,
+    _is_zip_filename,
+    _normalize_verdict,
+    _reader_policy,
+    _select_riskiest_file,
+    _verdict_badge_html,
+    _verdict_banner_config,
+    _verdict_color,
+    _verdict_icon_html,
+    _widget_key,
+)
+
+
+class _FakeUpload:
+    """Small upload stub used for UI helper tests."""
+
+    def __init__(self, name: str, payload: bytes) -> None:
+        """Store a fake uploaded filename and byte payload."""
+        self.name = name
+        self._payload = payload
+
+    def getvalue(self) -> bytes:
+        """Return the uploaded bytes."""
+        return self._payload
+
+
+class StreamlitUITestCase(unittest.TestCase):
+    """Validate small UI helpers that do not require Streamlit runtime."""
+
+    def test_is_pdf_filename_accepts_pdf_extensions(self) -> None:
+        """Recognize PDF filenames case-insensitively."""
+        self.assertTrue(_is_pdf_filename("sample.pdf"))
+        self.assertTrue(_is_pdf_filename("sample.PDF"))
+
+    def test_is_pdf_filename_rejects_non_pdf_names(self) -> None:
+        """Reject missing or non-PDF upload names."""
+        self.assertFalse(_is_pdf_filename("sample.txt"))
+        self.assertFalse(_is_pdf_filename(None))
+
+    def test_is_zip_filename_accepts_zip_extensions(self) -> None:
+        """Recognize ZIP filenames case-insensitively."""
+        self.assertTrue(_is_zip_filename("batch.zip"))
+        self.assertTrue(_is_zip_filename("batch.ZIP"))
+
+    def test_is_zip_filename_rejects_non_zip_names(self) -> None:
+        """Reject missing or non-ZIP upload names."""
+        self.assertFalse(_is_zip_filename("batch.pdf"))
+        self.assertFalse(_is_zip_filename(None))
+
+    def test_build_upload_signature_tracks_file_name_and_size(self) -> None:
+        """Build a stable signature for uploaded files."""
+        uploads = [
+            ("pdf_a", _FakeUpload("a.pdf", b"1234")),
+            ("pdf_b", _FakeUpload("b.pdf", b"12")),
+        ]
+
+        signature = _build_upload_signature(uploads)
+
+        self.assertEqual(signature, [("pdf_a", "a.pdf", 4), ("pdf_b", "b.pdf", 2)])
+
+    def test_build_hero_html_contains_premium_header_content(self) -> None:
+        """Build the premium hero content used at the top of the UI."""
+        hero_html = _build_hero_html()
+
+        self.assertIn("Advanced PDFSafeScan", hero_html)
+        self.assertIn("Intelligent Malicious PDF Detection", hero_html)
+        self.assertIn("Cybersecurity Research Dashboard", hero_html)
+
+    def test_count_verdicts_returns_expected_batch_totals(self) -> None:
+        """Count batch verdicts for overview metrics."""
+        analyzed_results = [
+            ("pdf_a", {"summary": {"file_name": "a.pdf", "final_label": "benign"}}),
+            ("pdf_b", {"summary": {"file_name": "b.pdf", "final_label": "malicious"}}),
+            ("pdf_c", {"summary": {"file_name": "c.pdf", "final_label": "suspicious"}}),
+            ("pdf_d", {"summary": {"file_name": "d.pdf", "final_label": "suspicious"}}),
+        ]
+
+        counts = _count_verdicts(analyzed_results)
+
+        self.assertEqual(counts, {"benign": 1, "suspicious": 2, "malicious": 1})
+
+    def test_build_batch_summary_rows_contains_expected_fields(self) -> None:
+        """Build batch summary rows for the top-level results table."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "sample.pdf",
+                        "final_label": "suspicious",
+                        "final_confidence": 0.71,
+                        "rule_score": 56.0,
+                    },
+                    "sha256": "abc123",
+                    "recommendation": "Open with caution.",
+                    "report_timestamp": "2026-03-26T12:00:00+00:00",
+                },
+            )
+        ]
+
+        rows = _build_batch_summary_rows(analyzed_results)
+
+        self.assertEqual(rows[0]["timestamp"], "2026-03-26T12:00:00+00:00")
+        self.assertEqual(rows[0]["file_name"], "sample.pdf")
+        self.assertEqual(rows[0]["sha256"], "abc123")
+        self.assertEqual(rows[0]["final_label"], "suspicious")
+        self.assertEqual(rows[0]["rule_score"], 56.0)
+        self.assertEqual(rows[0]["recommendation"], "Open with caution.")
+
+    def test_build_dashboard_table_rows_contains_expected_fields(self) -> None:
+        """Build analytics dashboard rows for analyzed files."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "sample.pdf",
+                        "final_label": "suspicious",
+                        "final_confidence": 0.71,
+                        "rule_score": 56.0,
+                    },
+                    "recommendation": "Open with caution.",
+                    "sha256": "abc123",
+                    "report_timestamp": "2026-03-26T12:00:00+00:00",
+                },
+            )
+        ]
+
+        rows = _build_dashboard_table_rows(analyzed_results)
+
+        self.assertEqual(rows[0]["timestamp"], "2026-03-26T12:00:00+00:00")
+        self.assertEqual(rows[0]["file_name"], "sample.pdf")
+        self.assertEqual(rows[0]["sha256"], "abc123")
+        self.assertEqual(rows[0]["final_label"], "suspicious")
+        self.assertEqual(rows[0]["confidence"], 0.71)
+        self.assertEqual(rows[0]["rule_score"], 56.0)
+        self.assertEqual(rows[0]["recommendation"], "Open with caution.")
+
+    def test_build_scan_history_table_rows_contains_expected_fields(self) -> None:
+        """Build readable display rows for the persistent scan history table."""
+        history_records = [
+            {
+                "timestamp": "2026-03-26T12:00:00+00:00",
+                "file_name": "sample.pdf",
+                "sha256": "abc123",
+                "final_label": "suspicious",
+                "final_confidence": 0.71,
+                "rule_score": 56.0,
+                "recommendation": "Open with caution.",
+            }
+        ]
+
+        rows = _build_scan_history_table_rows(history_records)
+
+        self.assertEqual(rows[0]["timestamp"], "2026-03-26T12:00:00+00:00")
+        self.assertEqual(rows[0]["file_name"], "sample.pdf")
+        self.assertEqual(rows[0]["sha256"], "abc123")
+        self.assertEqual(rows[0]["final_label"], "Suspicious")
+        self.assertEqual(rows[0]["rule_score"], 56.0)
+        self.assertEqual(rows[0]["review_status"], "New")
+        self.assertEqual(rows[0]["priority"], "Medium")
+        self.assertEqual(rows[0]["disposition"], "Suspicious")
+
+    def test_build_scan_history_table_rows_merges_saved_analyst_review_fields(self) -> None:
+        """Include saved analyst review values in scan history display rows."""
+        history_records = [
+            {
+                "timestamp": "2026-03-26T12:00:00+00:00",
+                "file_name": "sample.pdf",
+                "sha256": "abc123",
+                "final_label": "suspicious",
+                "final_confidence": 0.71,
+                "rule_score": 56.0,
+                "recommendation": "Open with caution.",
+            }
+        ]
+        review_records_by_sha256 = {
+            "abc123": {
+                "review_status": "Under Review",
+                "priority": "High",
+                "disposition": "Malicious",
+                "analyst_note": "Escalated after embedded action review.",
+            }
+        }
+
+        rows = _build_scan_history_table_rows(
+            history_records,
+            review_records_by_sha256=review_records_by_sha256,
+        )
+
+        self.assertEqual(rows[0]["review_status"], "Under Review")
+        self.assertEqual(rows[0]["priority"], "High")
+        self.assertEqual(rows[0]["disposition"], "Malicious")
+        self.assertIn("Escalated", rows[0]["analyst_note"])
+
+    def test_build_high_risk_table_rows_contains_risk_category(self) -> None:
+        """Build display rows for the high-risk review workflow."""
+        history_records = [
+            {
+                "timestamp": "2026-03-26T12:00:00+00:00",
+                "file_name": "danger.pdf",
+                "sha256": "deadbeef",
+                "final_label": "malicious",
+                "final_confidence": 0.93,
+                "rule_score": 88.0,
+                "recommendation": "Do not open.",
+            },
+            {
+                "timestamp": "2026-03-26T12:05:00+00:00",
+                "file_name": "review.pdf",
+                "sha256": "abc123",
+                "final_label": "suspicious",
+                "final_confidence": 0.72,
+                "rule_score": 75.0,
+                "recommendation": "Open with caution.",
+            },
+        ]
+
+        rows = _build_high_risk_table_rows(history_records)
+
+        self.assertEqual(rows[0]["risk_category"], "Malicious")
+        self.assertEqual(rows[1]["risk_category"], "Suspicious (Rule Score >= 70)")
+        self.assertEqual(rows[0]["file_name"], "danger.pdf")
+        self.assertEqual(rows[1]["file_name"], "review.pdf")
+        self.assertEqual(rows[0]["review_status"], "New")
+        self.assertEqual(rows[1]["priority"], "Medium")
+        self.assertEqual(rows[0]["disposition"], "Malicious")
+        self.assertEqual(rows[1]["disposition"], "Suspicious")
+
+    def test_build_high_risk_table_rows_merges_saved_analyst_review_fields(self) -> None:
+        """Include analyst review workflow fields in high-risk rows."""
+        history_records = [
+            {
+                "timestamp": "2026-03-26T12:00:00+00:00",
+                "file_name": "danger.pdf",
+                "sha256": "deadbeef",
+                "final_label": "malicious",
+                "final_confidence": 0.93,
+                "rule_score": 88.0,
+                "recommendation": "Do not open.",
+            }
+        ]
+        review_records_by_sha256 = {
+            "deadbeef": {
+                "review_status": "Escalated",
+                "priority": "Critical",
+                "disposition": "Malicious",
+                "analyst_note": "Confirmed active exploit indicators.",
+            }
+        }
+
+        rows = _build_high_risk_table_rows(
+            history_records,
+            review_records_by_sha256=review_records_by_sha256,
+        )
+
+        self.assertEqual(rows[0]["review_status"], "Escalated")
+        self.assertEqual(rows[0]["priority"], "Critical")
+        self.assertEqual(rows[0]["disposition"], "Malicious")
+        self.assertIn("Confirmed", rows[0]["analyst_note"])
+
+    def test_build_live_status_summary_uses_history_counts_and_latest_scan(self) -> None:
+        """Summarize total scans, verdict counts, and latest scan time from history."""
+        history_records = [
+            {
+                "timestamp": "2026-03-26T10:00:00+00:00",
+                "final_label": "suspicious",
+                "rule_score": 55.0,
+            },
+            {
+                "timestamp": "2026-03-27T08:30:00+00:00",
+                "final_label": "malicious",
+                "rule_score": 91.0,
+            },
+            {
+                "timestamp": "2026-03-27T09:45:00+00:00",
+                "final_label": "benign",
+                "rule_score": 4.0,
+            },
+        ]
+
+        summary = _build_live_status_summary(history_records)
+
+        self.assertEqual(summary["total_scans"], 3)
+        self.assertEqual(summary["malicious_count"], 1)
+        self.assertEqual(summary["suspicious_count"], 1)
+        self.assertIn("2026-03-27", str(summary["last_scan_time"]))
+
+    def test_build_live_status_strip_html_contains_operational_values(self) -> None:
+        """Render the live status strip HTML with key operational labels."""
+        history_records = [
+            {
+                "timestamp": "2026-03-27T09:45:00+00:00",
+                "final_label": "malicious",
+                "rule_score": 91.0,
+            }
+        ]
+
+        strip_html = _build_live_status_strip_html(history_records)
+
+        self.assertIn("Total Scans", strip_html)
+        self.assertIn("Malicious Files", strip_html)
+        self.assertIn("Suspicious Files", strip_html)
+        self.assertIn("Last Scan", strip_html)
+        self.assertIn('class="status-chip"', strip_html)
+
+    def test_build_history_trend_rows_groups_scans_by_day(self) -> None:
+        """Aggregate scan counts and rule score averages by day for history charts."""
+        history_records = [
+            {
+                "timestamp": "2026-03-26T10:00:00+00:00",
+                "final_label": "suspicious",
+                "rule_score": 50.0,
+            },
+            {
+                "timestamp": "2026-03-26T11:00:00+00:00",
+                "final_label": "malicious",
+                "rule_score": 90.0,
+            },
+            {
+                "timestamp": "2026-03-27T08:30:00+00:00",
+                "final_label": "benign",
+                "rule_score": 10.0,
+            },
+        ]
+
+        trend_rows = _build_history_trend_rows(history_records)
+
+        self.assertEqual(
+            trend_rows,
+            [
+                {
+                    "date": "2026-03-26",
+                    "scan_count": 2,
+                    "malicious_count": 1,
+                    "suspicious_count": 1,
+                    "average_rule_score": 70.0,
+                },
+                {
+                    "date": "2026-03-27",
+                    "scan_count": 1,
+                    "malicious_count": 0,
+                    "suspicious_count": 0,
+                    "average_rule_score": 10.0,
+                },
+            ],
+        )
+
+    def test_build_verdict_distribution_rows_uses_batch_counts(self) -> None:
+        """Build verdict distribution rows for the analytics dashboard."""
+        analyzed_results = [
+            ("pdf_a", {"summary": {"final_label": "benign"}}),
+            ("pdf_b", {"summary": {"final_label": "suspicious"}}),
+            ("pdf_c", {"summary": {"final_label": "suspicious"}}),
+            ("pdf_d", {"summary": {"final_label": "malicious"}}),
+        ]
+
+        rows = _build_verdict_distribution_rows(analyzed_results)
+
+        self.assertEqual(
+            rows,
+            [
+                {"verdict": "benign", "count": 1},
+                {"verdict": "suspicious", "count": 2},
+                {"verdict": "malicious", "count": 1},
+            ],
+        )
+
+    def test_build_score_and_confidence_chart_rows_contain_file_metrics(self) -> None:
+        """Build simple chart rows for score and confidence comparisons."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "sample.pdf",
+                        "final_confidence": 0.71,
+                        "rule_score": 56.0,
+                    }
+                },
+            )
+        ]
+
+        score_rows = _build_score_chart_rows(analyzed_results)
+        confidence_rows = _build_confidence_chart_rows(analyzed_results)
+
+        self.assertEqual(score_rows, [{"file_name": "sample.pdf", "rule_score": 56.0}])
+        self.assertEqual(confidence_rows, [{"file_name": "sample.pdf", "confidence": 0.71}])
+
+    def test_select_riskiest_file_prefers_malicious_then_rule_score(self) -> None:
+        """Choose the riskiest file in a batch for sticky-bar and overview use."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "a.pdf",
+                        "final_label": "suspicious",
+                        "final_confidence": 0.70,
+                        "rule_score": 40.0,
+                    }
+                },
+            ),
+            (
+                "pdf_b",
+                {
+                    "summary": {
+                        "file_name": "b.pdf",
+                        "final_label": "malicious",
+                        "final_confidence": 0.60,
+                        "rule_score": 30.0,
+                    }
+                },
+            ),
+        ]
+
+        self.assertEqual(_select_riskiest_file(analyzed_results), "b.pdf")
+
+    def test_reader_policy_for_benign_allows_inline_preview(self) -> None:
+        """Allow direct inline preview for benign files."""
+        policy = _reader_policy("benign")
+
+        self.assertTrue(policy["allow_inline_preview"])
+        self.assertFalse(policy["require_confirmation"])
+        self.assertEqual(policy["level"], "success")
+
+    def test_reader_policy_for_suspicious_requires_confirmation(self) -> None:
+        """Require an explicit override for suspicious files."""
+        policy = _reader_policy("suspicious")
+
+        self.assertFalse(policy["allow_inline_preview"])
+        self.assertTrue(policy["require_confirmation"])
+        self.assertEqual(policy["level"], "warning")
+
+    def test_reader_policy_for_malicious_uses_strong_warning(self) -> None:
+        """Require a strong warning and explicit override for malicious files."""
+        policy = _reader_policy("malicious")
+
+        self.assertFalse(policy["allow_inline_preview"])
+        self.assertTrue(policy["require_confirmation"])
+        self.assertEqual(policy["level"], "error")
+
+    def test_verdict_color_returns_expected_palette(self) -> None:
+        """Map verdict labels to the intended green, amber, and red palette."""
+        self.assertEqual(_verdict_color("benign"), "#16a34a")
+        self.assertEqual(_verdict_color("suspicious"), "#f59e0b")
+        self.assertEqual(_verdict_color("malicious"), "#dc2626")
+        self.assertEqual(_verdict_color("unknown"), "#64748b")
+
+    def test_normalize_verdict_maps_unknown_labels_safely(self) -> None:
+        """Normalize verdict labels for consistent badge and icon styling."""
+        self.assertEqual(_normalize_verdict("Benign"), "benign")
+        self.assertEqual(_normalize_verdict(" suspicious "), "suspicious")
+        self.assertEqual(_normalize_verdict("unexpected"), "unknown")
+
+    def test_verdict_icon_html_contains_expected_symbol(self) -> None:
+        """Return CSS-safe HTML entities for each verdict icon."""
+        benign_icon = _verdict_icon_html("benign")
+        suspicious_icon = _verdict_icon_html("suspicious")
+        malicious_icon = _verdict_icon_html("malicious")
+
+        self.assertIn("&#128737;", benign_icon)
+        self.assertIn("&#9888;", suspicious_icon)
+        self.assertIn("&#10006;", malicious_icon)
+
+    def test_verdict_badge_html_contains_label_and_color(self) -> None:
+        """Render a compact badge that includes the verdict icon and classes."""
+        badge_html = _verdict_badge_html("malicious", prefix="PDF A")
+
+        self.assertIn("PDF A: Malicious", badge_html)
+        self.assertIn("verdict-badge-malicious", badge_html)
+        self.assertIn("verdict-badge-icon", badge_html)
+        self.assertIn("&#10006;", badge_html)
+
+    def test_build_sticky_verdict_bar_html_for_single_file_contains_summary_fields(self) -> None:
+        """Build a compact sticky bar for single-file analysis."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "sample.pdf",
+                        "final_label": "suspicious",
+                        "final_confidence": 0.71,
+                        "rule_score": 56.0,
+                    }
+                },
+            )
+        ]
+
+        sticky_html = _build_sticky_verdict_bar_html(analyzed_results)
+
+        self.assertIn("Current Analysis Status", sticky_html)
+        self.assertIn("sample.pdf", sticky_html)
+        self.assertIn("Suspicious", sticky_html)
+        self.assertIn("56.00", sticky_html)
+
+    def test_build_sticky_verdict_bar_html_for_two_files_contains_comparison_fields(self) -> None:
+        """Build a compact sticky bar for two-file comparison mode."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "a.pdf",
+                        "final_label": "benign",
+                        "final_confidence": 0.91,
+                        "rule_score": 12.0,
+                        "suspicious_indicators_found": ["/URI (1)"],
+                    }
+                },
+            ),
+            (
+                "pdf_b",
+                {
+                    "summary": {
+                        "file_name": "b.pdf",
+                        "final_label": "malicious",
+                        "final_confidence": 0.88,
+                        "rule_score": 78.0,
+                        "suspicious_indicators_found": ["/JavaScript (1)", "/OpenAction (1)"],
+                    }
+                },
+            ),
+        ]
+
+        sticky_html = _build_sticky_verdict_bar_html(analyzed_results)
+
+        self.assertIn("PDF A", sticky_html)
+        self.assertIn("PDF B", sticky_html)
+        self.assertIn("Riskier File", sticky_html)
+        self.assertIn("Different", sticky_html)
+
+    def test_build_sticky_verdict_bar_html_for_batch_contains_overview_fields(self) -> None:
+        """Build a compact sticky bar for batch analysis mode."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "a.pdf",
+                        "final_label": "benign",
+                        "final_confidence": 0.91,
+                        "rule_score": 12.0,
+                    }
+                },
+            ),
+            (
+                "pdf_b",
+                {
+                    "summary": {
+                        "file_name": "b.pdf",
+                        "final_label": "malicious",
+                        "final_confidence": 0.88,
+                        "rule_score": 78.0,
+                    }
+                },
+            ),
+            (
+                "pdf_c",
+                {
+                    "summary": {
+                        "file_name": "c.pdf",
+                        "final_label": "suspicious",
+                        "final_confidence": 0.74,
+                        "rule_score": 44.0,
+                    }
+                },
+            ),
+        ]
+
+        sticky_html = _build_sticky_verdict_bar_html(analyzed_results)
+
+        self.assertIn("Total Files", sticky_html)
+        self.assertIn("Malicious", sticky_html)
+        self.assertIn("Suspicious", sticky_html)
+        self.assertIn("Riskiest File", sticky_html)
+
+    def test_verdict_banner_config_returns_streamlit_method(self) -> None:
+        """Map verdict labels onto clear Streamlit-native styling."""
+        benign = _verdict_banner_config("benign")
+        suspicious = _verdict_banner_config("suspicious")
+        malicious = _verdict_banner_config("malicious")
+
+        self.assertEqual(benign["method"], "success")
+        self.assertEqual(suspicious["method"], "warning")
+        self.assertEqual(malicious["method"], "error")
+
+    def test_widget_key_builds_stable_unique_keys(self) -> None:
+        """Generate stable widget keys for side-by-side PDF panels."""
+        self.assertEqual(_widget_key("pdf_a", "download"), "pdf_a_download")
+        self.assertEqual(_widget_key("pdf_b", "download"), "pdf_b_download")
+
+
+if __name__ == "__main__":
+    unittest.main()

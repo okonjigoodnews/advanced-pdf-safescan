@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Advanced PDFSafeScan",
+  "version": "1.4.0",
+  "description": "Hosted-ready PDF scanning with the Advanced PDFSafeScan API service.",
+  "permissions": [
+    "contextMenus",
+    "downloads",
+    "storage",
+    "notifications",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Advanced PDFSafeScan",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
+}

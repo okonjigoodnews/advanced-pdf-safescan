@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Advanced PDFSafeScan Settings</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="settings-shell">
+      <section class="settings-panel">
+        <div class="header-badge">Extension Settings</div>
+        <h1>Advanced PDFSafeScan</h1>
+        <p>Configure the public hosted backend API, dashboard URL, token-based access, and notification behavior. Local development URLs still work when you need them.</p>
+
+        <form id="settings-form" class="settings-form">
+          <label>
+            <span>Backend Base URL</span>
+            <input id="backendBaseUrl" name="backendBaseUrl" type="url" placeholder="https://api.advanced-pdfsafescan.example">
+          </label>
+
+          <label>
+            <span>Dashboard URL</span>
+            <input id="dashboardUrl" name="dashboardUrl" type="url" placeholder="https://dashboard.advanced-pdfsafescan.example">
+          </label>
+
+          <label>
+            <span>API Token (Optional)</span>
+            <input id="apiToken" name="apiToken" type="password" placeholder="Shared token for hosted deployments" autocomplete="off">
+          </label>
+
+          <label class="toggle-row">
+            <input id="autoScanDownloads" name="autoScanDownloads" type="checkbox">
+            <span>Automatically scan downloaded PDFs</span>
+          </label>
+
+          <label class="toggle-row">
+            <input id="enableNotifications" name="enableNotifications" type="checkbox">
+            <span>Enable browser notifications</span>
+          </label>
+
+          <label class="toggle-row">
+            <input id="warnOnSuspicious" name="warnOnSuspicious" type="checkbox">
+            <span>Warn on suspicious results</span>
+          </label>
+
+          <label class="toggle-row">
+            <input id="autoOpenDashboardForMalicious" name="autoOpenDashboardForMalicious" type="checkbox">
+            <span>Auto-open dashboard for malicious results</span>
+          </label>
+
+          <div class="button-row">
+            <button type="submit" class="primary-button">Save Settings</button>
+            <button id="reset-defaults" type="button" class="secondary-button">Reset Defaults</button>
+          </div>
+        </form>
+
+        <p id="save-status" class="save-status">Settings are stored in Chrome sync storage.</p>
+      </section>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>
