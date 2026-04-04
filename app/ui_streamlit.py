@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import base64
 import html
+import json
+import os
 import sys
 import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +25,7 @@ except ImportError:  # pragma: no cover - exercised only when dependency is miss
     st = None
 
 from app.main import run_pdf_analysis_details
+from app.runtime_config import API_TOKEN_HEADER_NAME
 from src.ml.classifier import MLClassifierError, MalwareClassifier, load_saved_model
 from src.parser.document_parser import PDFParserError
 from src.reporting.comparison import build_comparison_summary
@@ -53,6 +59,8 @@ from src.reporting.summary import summary_to_json
 from src.reporting.zip_ingest import ZIPIngestError, extract_pdf_uploads_from_zip
 
 INLINE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
+_HISTORY_API_RECENT_LIMIT = 250
+_HISTORY_API_TIMEOUT_SECONDS = 8
 _PREVIEW_CHAR_LIMITS = {
     "benign": 5000,
     "suspicious": 1800,
@@ -726,15 +734,16 @@ def _build_scan_history_table_rows(
     rows: list[dict[str, Any]] = []
     review_records_by_sha256 = review_records_by_sha256 or {}
     for record in history_records:
+        sha256 = str(record.get("sha256", ""))
         review_fields = _normalize_review_record_for_display(
-            review_records_by_sha256.get(str(record.get("sha256", ""))),
+            review_records_by_sha256.get(sha256) or record,
             final_label=str(record.get("final_label", "suspicious")),
         )
         rows.append(
             {
                 "timestamp": str(record.get("timestamp", "")),
                 "file_name": str(record.get("file_name", "unknown")),
-                "sha256": str(record.get("sha256", "")),
+                "sha256": sha256,
                 "final_label": str(record.get("final_label", "unknown")).title(),
                 "final_confidence": round(float(record.get("final_confidence", 0.0)), 3),
                 "rule_score": round(float(record.get("rule_score", 0.0)), 3),
@@ -756,6 +765,7 @@ def _build_high_risk_table_rows(
     rows: list[dict[str, Any]] = []
     review_records_by_sha256 = review_records_by_sha256 or {}
     for record in history_records:
+        sha256 = str(record.get("sha256", ""))
         final_label = str(record.get("final_label", "unknown")).lower()
         risk_category = (
             "Malicious"
@@ -763,7 +773,7 @@ def _build_high_risk_table_rows(
             else f"Suspicious (Rule Score >= {HIGH_RISK_RULE_SCORE_THRESHOLD:.0f})"
         )
         review_fields = _normalize_review_record_for_display(
-            review_records_by_sha256.get(str(record.get("sha256", ""))),
+            review_records_by_sha256.get(sha256) or record,
             final_label=final_label,
         )
         rows.append(
@@ -771,7 +781,7 @@ def _build_high_risk_table_rows(
                 "risk_category": risk_category,
                 "timestamp": str(record.get("timestamp", "")),
                 "file_name": str(record.get("file_name", "unknown")),
-                "sha256": str(record.get("sha256", "")),
+                "sha256": sha256,
                 "final_label": str(record.get("final_label", "unknown")).title(),
                 "final_confidence": round(float(record.get("final_confidence", 0.0)), 3),
                 "rule_score": round(float(record.get("rule_score", 0.0)), 3),
@@ -794,6 +804,98 @@ def _parse_history_timestamp(timestamp: str) -> datetime | None:
         return datetime.fromisoformat(normalized_timestamp.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _safe_float(value: Any) -> float:
+    """Convert a numeric-like value into float safely."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _normalize_dashboard_history_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a hosted recent-scan row into the local dashboard history shape."""
+    final_label = _normalize_verdict(str(record.get("final_label", "unknown")))
+    return {
+        "timestamp": str(record.get("timestamp", "")),
+        "file_name": str(record.get("file_name", "unknown")),
+        "sha256": str(record.get("sha256", "")),
+        "final_label": final_label,
+        "final_confidence": _safe_float(record.get("final_confidence", 0.0)),
+        "rule_score": _safe_float(record.get("rule_score", 0.0)),
+        "recommendation": str(record.get("recommendation", "")),
+        "review_status": str(record.get("review_status", _DEFAULT_REVIEW_STATUS)),
+        "priority": str(record.get("priority", _DEFAULT_PRIORITY)),
+        "disposition": str(
+            record.get("disposition", _default_disposition_for_verdict(final_label))
+        ),
+        "analyst_note": str(record.get("analyst_note", "")).strip(),
+    }
+
+
+def _fetch_hosted_scan_history(
+    *,
+    base_url: str | None = None,
+    api_auth_token: str | None = None,
+    limit: int = _HISTORY_API_RECENT_LIMIT,
+) -> list[dict[str, Any]] | None:
+    """Fetch recent scan history rows from the hosted API when configured."""
+    normalized_base_url = str(
+        base_url if base_url is not None else os.getenv("APP_PUBLIC_BASE_URL", "")
+    ).strip().rstrip("/")
+    if not normalized_base_url:
+        return None
+
+    try:
+        resolved_limit = max(int(limit), 1)
+    except (TypeError, ValueError):
+        resolved_limit = _HISTORY_API_RECENT_LIMIT
+
+    request_url = (
+        f"{normalized_base_url}/api/scan/recent?"
+        f"{urllib.parse.urlencode({'limit': resolved_limit})}"
+    )
+    headers = {"Accept": "application/json"}
+    resolved_api_auth_token = str(
+        api_auth_token if api_auth_token is not None else os.getenv("API_AUTH_TOKEN", "")
+    ).strip()
+    if resolved_api_auth_token:
+        headers[API_TOKEN_HEADER_NAME] = resolved_api_auth_token
+        headers["Authorization"] = f"Bearer {resolved_api_auth_token}"
+
+    request_object = urllib.request.Request(request_url, headers=headers)
+    try:
+        with urllib.request.urlopen(request_object, timeout=_HISTORY_API_TIMEOUT_SECONDS) as response:
+            response_payload = response.read().decode("utf-8")
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+    try:
+        payload = json.loads(response_payload)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(payload, dict) or str(payload.get("status", "")).lower() != "ok":
+        return None
+
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return None
+
+    return [
+        _normalize_dashboard_history_record(item)
+        for item in items
+        if isinstance(item, dict)
+    ]
+
+
+def _load_dashboard_history_records(limit: int = _HISTORY_API_RECENT_LIMIT) -> list[dict[str, Any]]:
+    """Load dashboard history, preferring hosted API rows when configured."""
+    hosted_history_records = _fetch_hosted_scan_history(limit=limit)
+    if hosted_history_records is not None:
+        return hosted_history_records
+    return load_scan_history()
 
 
 def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[str, str | int]:
@@ -1031,12 +1133,15 @@ def _verdict_badge_html(final_label: str, *, prefix: str | None = None) -> str:
     """Return a compact colored badge for a verdict label."""
     normalized_label = _normalize_verdict(final_label)
     label_text = str(normalized_label).title()
-    full_text = f"{prefix}: {label_text}" if prefix else label_text
+    prefix_html = ""
+    if prefix:
+        prefix_html = f'<span class="verdict-badge-prefix">{html.escape(prefix)}:</span> '
     return (
         f'<div class="verdict-badge verdict-badge-{normalized_label}">'
         f"{_verdict_icon_html(normalized_label)}"
-        f'<span class="verdict-badge-text">{html.escape(full_text)}</span>'
-        "</div>"
+        '<span class="verdict-badge-text">'
+        f"{prefix_html}{html.escape(label_text)}"
+        "</span></div>"
     )
 
 
@@ -1726,7 +1831,7 @@ def _render_scan_history_section(
     history_records: list[dict[str, Any]] | None = None,
 ) -> None:
     """Render persistent scan history with search, filters, and sorting."""
-    history_records = load_scan_history() if history_records is None else history_records
+    history_records = _load_dashboard_history_records() if history_records is None else history_records
     review_records_by_sha256 = load_analyst_reviews_by_sha256()
     with _get_card_container(streamlit_module):
         streamlit_module.subheader("Scan History")
@@ -1815,7 +1920,7 @@ def _render_high_risk_workflow_section(
     history_records: list[dict[str, Any]] | None = None,
 ) -> None:
     """Render a practical quarantine-style workflow for malicious and high-risk files."""
-    history_records = load_scan_history() if history_records is None else history_records
+    history_records = _load_dashboard_history_records() if history_records is None else history_records
     review_records_by_sha256 = load_analyst_reviews_by_sha256()
     with _get_card_container(streamlit_module):
         streamlit_module.subheader("High-Risk / Quarantine Workflow")
@@ -2003,7 +2108,7 @@ def main() -> None:
 
     current_signature = _build_upload_signature(uploads)
     session_state = streamlit_module.session_state
-    history_records = load_scan_history()
+    history_records = _load_dashboard_history_records()
 
     if analyze_clicked:
         if not uploads:
@@ -2061,7 +2166,7 @@ def main() -> None:
                 append_scan_history_records(analyzed_results)
             except OSError as history_error:
                 streamlit_module.warning(f"Analysis completed, but scan history could not be saved: {history_error}")
-            history_records = load_scan_history()
+            history_records = _load_dashboard_history_records()
         except (FileNotFoundError, PDFParserError, MLClassifierError, PDFReaderError, ValueError) as exc:
             streamlit_module.error(f"Analysis failed: {exc}")
             return

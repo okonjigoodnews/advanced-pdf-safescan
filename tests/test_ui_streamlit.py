@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -25,8 +27,10 @@ from app.ui_streamlit import (
     _build_upload_signature,
     _build_verdict_distribution_rows,
     _count_verdicts,
+    _fetch_hosted_scan_history,
     _is_pdf_filename,
     _is_zip_filename,
+    _load_dashboard_history_records,
     _normalize_verdict,
     _reader_policy,
     _select_riskiest_file,
@@ -220,6 +224,31 @@ class StreamlitUITestCase(unittest.TestCase):
         self.assertEqual(rows[0]["disposition"], "Malicious")
         self.assertIn("Escalated", rows[0]["analyst_note"])
 
+    def test_build_scan_history_table_rows_uses_embedded_review_fields_from_hosted_api(self) -> None:
+        """Use review workflow fields already embedded in hosted API history rows."""
+        history_records = [
+            {
+                "timestamp": "2026-03-26T12:00:00+00:00",
+                "file_name": "sample.pdf",
+                "sha256": "abc123",
+                "final_label": "suspicious",
+                "final_confidence": 0.71,
+                "rule_score": 56.0,
+                "recommendation": "Open with caution.",
+                "review_status": "Escalated",
+                "priority": "Critical",
+                "disposition": "Malicious",
+                "analyst_note": "Hosted analyst workflow note.",
+            }
+        ]
+
+        rows = _build_scan_history_table_rows(history_records)
+
+        self.assertEqual(rows[0]["review_status"], "Escalated")
+        self.assertEqual(rows[0]["priority"], "Critical")
+        self.assertEqual(rows[0]["disposition"], "Malicious")
+        self.assertIn("Hosted analyst workflow note.", rows[0]["analyst_note"])
+
     def test_build_high_risk_table_rows_contains_risk_category(self) -> None:
         """Build display rows for the high-risk review workflow."""
         history_records = [
@@ -285,6 +314,110 @@ class StreamlitUITestCase(unittest.TestCase):
         self.assertEqual(rows[0]["priority"], "Critical")
         self.assertEqual(rows[0]["disposition"], "Malicious")
         self.assertIn("Confirmed", rows[0]["analyst_note"])
+
+    @patch("app.ui_streamlit.urllib.request.urlopen")
+    def test_fetch_hosted_scan_history_uses_token_and_returns_rows(self, mock_urlopen) -> None:
+        """Fetch hosted history rows with auth headers and normalize the payload."""
+
+        class _FakeResponse:
+            def read(self) -> bytes:
+                return json.dumps(
+                    {
+                        "status": "ok",
+                        "items": [
+                            {
+                                "timestamp": "2026-03-29T12:00:00+00:00",
+                                "file_name": "browser.pdf",
+                                "sha256": "abc123",
+                                "final_label": "suspicious",
+                                "final_confidence": 0.81,
+                                "rule_score": 67.0,
+                                "recommendation": "Open with caution.",
+                                "review_status": "Under Review",
+                                "priority": "High",
+                                "disposition": "Suspicious",
+                                "analyst_note": "Fetched from hosted API.",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+
+            def __enter__(self) -> "_FakeResponse":
+                return self
+
+            def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+                return None
+
+        mock_urlopen.return_value = _FakeResponse()
+
+        history_records = _fetch_hosted_scan_history(
+            base_url="https://api.example.com",
+            api_auth_token="secret-token",
+            limit=25,
+        )
+
+        self.assertIsNotNone(history_records)
+        self.assertEqual(len(history_records or []), 1)
+        self.assertEqual(history_records[0]["file_name"], "browser.pdf")
+        self.assertEqual(history_records[0]["review_status"], "Under Review")
+        request_object = mock_urlopen.call_args[0][0]
+        request_headers = {key.lower(): value for key, value in request_object.header_items()}
+        self.assertEqual(request_object.full_url, "https://api.example.com/api/scan/recent?limit=25")
+        self.assertEqual(request_headers["x-api-token"], "secret-token")
+        self.assertEqual(request_headers["authorization"], "Bearer secret-token")
+
+    @patch("app.ui_streamlit.load_scan_history")
+    @patch("app.ui_streamlit._fetch_hosted_scan_history")
+    def test_load_dashboard_history_records_prefers_hosted_api_rows(
+        self,
+        mock_fetch_hosted_scan_history,
+        mock_load_scan_history,
+    ) -> None:
+        """Use hosted API rows first when the dashboard can reach the API."""
+        hosted_history_records = [
+            {
+                "timestamp": "2026-03-29T12:00:00+00:00",
+                "file_name": "browser.pdf",
+                "sha256": "abc123",
+                "final_label": "malicious",
+                "final_confidence": 0.97,
+                "rule_score": 91.0,
+                "recommendation": "Do not open.",
+            }
+        ]
+        mock_fetch_hosted_scan_history.return_value = hosted_history_records
+
+        history_records = _load_dashboard_history_records()
+
+        self.assertEqual(history_records, hosted_history_records)
+        mock_load_scan_history.assert_not_called()
+
+    @patch("app.ui_streamlit.load_scan_history")
+    @patch("app.ui_streamlit._fetch_hosted_scan_history")
+    def test_load_dashboard_history_records_falls_back_to_local_history(
+        self,
+        mock_fetch_hosted_scan_history,
+        mock_load_scan_history,
+    ) -> None:
+        """Fall back to local JSON history only when hosted history is unavailable."""
+        local_history_records = [
+            {
+                "timestamp": "2026-03-29T10:00:00+00:00",
+                "file_name": "local.pdf",
+                "sha256": "local123",
+                "final_label": "benign",
+                "final_confidence": 0.92,
+                "rule_score": 5.0,
+                "recommendation": "Safe to open.",
+            }
+        ]
+        mock_fetch_hosted_scan_history.return_value = None
+        mock_load_scan_history.return_value = local_history_records
+
+        history_records = _load_dashboard_history_records()
+
+        self.assertEqual(history_records, local_history_records)
+        mock_load_scan_history.assert_called_once()
 
     def test_build_live_status_summary_uses_history_counts_and_latest_scan(self) -> None:
         """Summarize total scans, verdict counts, and latest scan time from history."""
@@ -494,7 +627,9 @@ class StreamlitUITestCase(unittest.TestCase):
         """Render a compact badge that includes the verdict icon and classes."""
         badge_html = _verdict_badge_html("malicious", prefix="PDF A")
 
-        self.assertIn("PDF A: Malicious", badge_html)
+        self.assertIn("PDF A", badge_html)
+        self.assertIn("Malicious", badge_html)
+        self.assertIn("verdict-badge-prefix", badge_html)
         self.assertIn("verdict-badge-malicious", badge_html)
         self.assertIn("verdict-badge-icon", badge_html)
         self.assertIn("&#10006;", badge_html)
