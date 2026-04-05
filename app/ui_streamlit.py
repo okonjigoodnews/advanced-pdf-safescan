@@ -80,7 +80,7 @@ _HISTORY_EXPORT_FIELDNAMES = [
     "disposition",
     "analyst_note",
 ]
-_HERO_BADGE_TEXT = "Cybersecurity Research Dashboard"
+_HERO_BADGE_TEXT = "CYBERSECURITY PDF INTELLIGENCE"
 _VERDICT_ICON_HTML = {
     "benign": "&#128737;",
     "suspicious": "&#9888;",
