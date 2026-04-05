@@ -31,9 +31,11 @@ from app.ui_streamlit import (
     _is_pdf_filename,
     _is_zip_filename,
     _load_dashboard_history_records,
+    _load_dashboard_history_records_for_client,
     _normalize_verdict,
     _reader_policy,
     _select_riskiest_file,
+    _streamlit_query_param_client_id,
     _verdict_badge_html,
     _verdict_banner_config,
     _verdict_color,
@@ -366,6 +368,34 @@ class StreamlitUITestCase(unittest.TestCase):
         self.assertEqual(request_headers["x-api-token"], "secret-token")
         self.assertEqual(request_headers["authorization"], "Bearer secret-token")
 
+    @patch("app.ui_streamlit.urllib.request.urlopen")
+    def test_fetch_hosted_scan_history_sends_client_id_header_when_present(self, mock_urlopen) -> None:
+        """Forward dashboard client_id query state to the hosted API request headers."""
+
+        class _FakeResponse:
+            def read(self) -> bytes:
+                return json.dumps({"status": "ok", "items": []}).encode("utf-8")
+
+            def __enter__(self) -> "_FakeResponse":
+                return self
+
+            def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+                return None
+
+        mock_urlopen.return_value = _FakeResponse()
+
+        history_records = _fetch_hosted_scan_history(
+            base_url="https://api.example.com",
+            api_auth_token="secret-token",
+            client_id="client-a",
+            limit=10,
+        )
+
+        self.assertEqual(history_records, [])
+        request_object = mock_urlopen.call_args[0][0]
+        request_headers = {key.lower(): value for key, value in request_object.header_items()}
+        self.assertEqual(request_headers["x-client-id"], "client-a")
+
     @patch("app.ui_streamlit.load_scan_history")
     @patch("app.ui_streamlit._fetch_hosted_scan_history")
     def test_load_dashboard_history_records_prefers_hosted_api_rows(
@@ -418,6 +448,38 @@ class StreamlitUITestCase(unittest.TestCase):
 
         self.assertEqual(history_records, local_history_records)
         mock_load_scan_history.assert_called_once()
+
+    @patch("app.ui_streamlit.load_scan_history")
+    @patch("app.ui_streamlit._fetch_hosted_scan_history")
+    def test_load_dashboard_history_records_for_client_passes_client_id_through(
+        self,
+        mock_fetch_hosted_scan_history,
+        mock_load_scan_history,
+    ) -> None:
+        """Pass the dashboard query-param client_id into hosted history loading."""
+        mock_fetch_hosted_scan_history.return_value = []
+
+        history_records = _load_dashboard_history_records_for_client(client_id="client-a", limit=9)
+
+        self.assertEqual(history_records, [])
+        mock_fetch_hosted_scan_history.assert_called_once_with(client_id="client-a", limit=9)
+        mock_load_scan_history.assert_not_called()
+
+    def test_streamlit_query_param_client_id_reads_query_state(self) -> None:
+        """Read a client_id from Streamlit query params when present."""
+
+        class _FakeStreamlit:
+            query_params = {"client_id": "client-a"}
+
+        self.assertEqual(_streamlit_query_param_client_id(_FakeStreamlit()), "client-a")
+
+    def test_streamlit_query_param_client_id_handles_missing_value(self) -> None:
+        """Return a blank client_id when the dashboard URL has no client_id parameter."""
+
+        class _FakeStreamlit:
+            query_params = {}
+
+        self.assertEqual(_streamlit_query_param_client_id(_FakeStreamlit()), "")
 
     def test_build_live_status_summary_uses_history_counts_and_latest_scan(self) -> None:
         """Summarize total scans, verdict counts, and latest scan time from history."""
@@ -756,3 +818,4 @@ class StreamlitUITestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

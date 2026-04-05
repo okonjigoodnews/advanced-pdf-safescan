@@ -56,6 +56,7 @@ _MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 _MAX_JSON_REQUEST_BYTES = 22 * 1024 * 1024
 _MAX_SOURCE_URL_LENGTH = 2048
 _ALLOWED_REMOTE_SCHEMES = {"http", "https"}
+CLIENT_ID_HEADER_NAME = "X-Client-ID"
 
 _classifier_cache: dict[str, MalwareClassifier] = {}
 _logger = logging.getLogger(__name__)
@@ -124,7 +125,9 @@ def create_app(
             response.headers["Access-Control-Allow-Origin"] = allow_origin
             if allow_origin != "*":
                 response.headers["Vary"] = "Origin"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-API-Token"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-API-Token, X-Client-ID"
+        )
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Max-Age"] = "3600"
         return response
@@ -148,7 +151,10 @@ def create_app(
     def recent_scans() -> Any:
         """Return recent scan rows for the extension popup and other clients."""
         limit = _safe_int(request.args.get("limit", runtime_config.recent_limit), runtime_config.recent_limit)
-        history_records = load_scan_history(history_path=runtime_config.history_path)
+        history_records = _filter_history_records_for_client(
+            load_scan_history(history_path=runtime_config.history_path),
+            _request_client_id(),
+        )
         review_records_by_sha256 = load_analyst_reviews_by_sha256(
             review_notes_path=runtime_config.review_notes_path
         )
@@ -169,6 +175,7 @@ def create_app(
     def scan_file() -> Any:
         """Accept an uploaded PDF file and return an extension-friendly scan response."""
         try:
+            client_id = _request_client_id()
             file_name, content_type, pdf_bytes = _read_uploaded_pdf_request()
             _validate_pdf_upload(
                 file_name=file_name,
@@ -179,6 +186,7 @@ def create_app(
                 pdf_bytes=pdf_bytes,
                 file_name=file_name,
                 model_dir=runtime_config.model_dir,
+                client_id=client_id,
                 history_path=runtime_config.history_path,
                 review_notes_path=runtime_config.review_notes_path,
             )
@@ -204,6 +212,7 @@ def create_app(
     def scan_url() -> Any:
         """Accept a PDF URL, fetch it on the server, and return a scan response."""
         try:
+            client_id = _request_client_id()
             request_payload = request.get_json(silent=True)
             if not isinstance(request_payload, dict):
                 raise APIRequestError(
@@ -222,6 +231,7 @@ def create_app(
             payload = _scan_pdf_url(
                 source_url,
                 model_dir=runtime_config.model_dir,
+                client_id=client_id,
                 history_path=runtime_config.history_path,
                 review_notes_path=runtime_config.review_notes_path,
             )
@@ -420,6 +430,7 @@ def _scan_pdf_url(
     source_url: str,
     *,
     model_dir: Path,
+    client_id: str = "",
     history_path: str | Path | None = None,
     review_notes_path: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -469,6 +480,7 @@ def _scan_pdf_url(
         file_name=file_name,
         model_dir=model_dir,
         source_url=source_url,
+        client_id=client_id,
         history_path=history_path,
         review_notes_path=review_notes_path,
     )
@@ -480,6 +492,7 @@ def _scan_pdf_bytes(
     file_name: str,
     model_dir: Path,
     source_url: str = "",
+    client_id: str = "",
     history_path: str | Path | None = None,
     review_notes_path: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -490,6 +503,15 @@ def _scan_pdf_bytes(
     cached_history_record = find_cached_history_record_by_sha256(history_records, sha256)
     cached_review_record = review_records_by_sha256.get(sha256)
     if cached_history_record is not None:
+        cached_analysis_result = _build_cached_history_analysis_result(
+            cached_history_record,
+            file_name=file_name,
+            client_id=client_id,
+        )
+        append_scan_history_records(
+            [("extension_api_cached", cached_analysis_result)],
+            history_path=history_path,
+        )
         return build_scan_response_from_history_record(
             cached_history_record,
             source_url=source_url,
@@ -512,6 +534,7 @@ def _scan_pdf_bytes(
                 "file_name": file_name,
             },
             "sha256": sha256,
+            "client_id": client_id,
             "recommendation": recommendation_for_verdict(str(summary.get("final_label", "unknown"))),
             "report_timestamp": _utc_timestamp(),
         }
@@ -536,6 +559,51 @@ def _get_classifier(*, model_dir: Path) -> MalwareClassifier:
     if cache_key not in _classifier_cache:
         _classifier_cache[cache_key] = load_saved_model(model_dir=model_dir)
     return _classifier_cache[cache_key]
+
+
+def _request_client_id() -> str:
+    """Return the normalized installation-scoped client id from the request."""
+    return str(request.headers.get(CLIENT_ID_HEADER_NAME, "")).strip()
+
+
+def _filter_history_records_for_client(
+    history_records: list[dict[str, Any]],
+    client_id: str,
+) -> list[dict[str, Any]]:
+    """Return only records visible to the requesting client installation."""
+    normalized_client_id = str(client_id).strip()
+    if normalized_client_id:
+        return [
+            record
+            for record in history_records
+            if str(record.get("client_id", "")).strip() == normalized_client_id
+        ]
+    return [
+        record
+        for record in history_records
+        if not str(record.get("client_id", "")).strip()
+    ]
+
+
+def _build_cached_history_analysis_result(
+    history_record: dict[str, Any],
+    *,
+    file_name: str,
+    client_id: str,
+) -> dict[str, Any]:
+    """Build a lightweight history record append payload for cached scan requests."""
+    return {
+        "summary": {
+            "file_name": file_name or str(history_record.get("file_name", "unknown")),
+            "final_label": str(history_record.get("final_label", "unknown")),
+            "final_confidence": _safe_float(history_record.get("final_confidence", 0.0)),
+            "rule_score": _safe_float(history_record.get("rule_score", 0.0)),
+        },
+        "sha256": str(history_record.get("sha256", "")),
+        "client_id": str(client_id).strip(),
+        "recommendation": str(history_record.get("recommendation", "")),
+        "report_timestamp": _utc_timestamp(),
+    }
 
 
 def _has_valid_api_token(expected_token: str) -> bool:
@@ -588,6 +656,14 @@ def _filename_from_url(source_url: str) -> str:
     return file_name
 
 
+def _safe_float(value: Any) -> float:
+    """Convert a value to float safely."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _safe_int(value: Any, default: int) -> int:
     """Convert a value to int safely."""
     try:
@@ -603,3 +679,4 @@ def _utc_timestamp() -> str:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

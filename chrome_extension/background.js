@@ -17,6 +17,8 @@ const CONTEXT_MENU_SCAN_LINK = "advanced-pdfsafescan-scan-link";
 const CONTEXT_MENU_SCAN_PAGE = "advanced-pdfsafescan-scan-page";
 const MAX_RECENT_SCANS = 8;
 const API_TOKEN_HEADER_NAME = "X-API-Token";
+const CLIENT_ID_HEADER_NAME = "X-Client-ID";
+const CLIENT_ID_STORAGE_KEY = "advanced_pdfsafescan_client_id";
 const NOTIFICATION_ICON_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
     <defs>
@@ -33,90 +35,109 @@ const NOTIFICATION_ICON_URL = `data:image/svg+xml;charset=utf-8,${encodeURICompo
   </svg>
 `)}`;
 
-chrome.runtime.onInstalled.addListener(async () => {
-  await initializeSettings();
-  await ensureContextMenus();
-});
+const hasChromeApis =
+  typeof chrome !== "undefined" &&
+  chrome.runtime &&
+  chrome.storage &&
+  chrome.storage.local;
 
-chrome.runtime.onStartup.addListener(async () => {
-  await ensureContextMenus();
-});
-
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === CONTEXT_MENU_SCAN_LINK && info.linkUrl) {
-    scanPdfUrl(info.linkUrl, { trigger: "context-link" });
-    return;
-  }
-  if (info.menuItemId === CONTEXT_MENU_SCAN_PAGE && tab?.url) {
-    scanPdfUrl(tab.url, { trigger: "context-page" });
-  }
-});
-
-chrome.downloads.onChanged.addListener((delta) => {
-  if (delta.state?.current !== "complete") {
-    return;
-  }
-  handleCompletedDownload(delta.id);
-});
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  (async () => {
-    if (message?.action === "getPopupState") {
-      const settings = await getSettings();
-      const backendHealth = await checkBackendHealth(settings);
-      const storageState = await chrome.storage.local.get(DEFAULT_LOCAL_STATE);
-      const backendRecentScans = await fetchRecentScans(settings);
-      const recentScans = backendRecentScans.length ? backendRecentScans : storageState.recentScans;
-
-      if (backendRecentScans.length) {
-        await chrome.storage.local.set({ recentScans: backendRecentScans });
-      }
-
-      sendResponse({
-        ok: true,
-        backendReachable: backendHealth.reachable,
-        backendMessage: backendHealth.message,
-        latestScanResult: storageState.latestScanResult,
-        recentScans,
-        settings
-      });
-      return;
-    }
-
-    if (message?.action === "scanCurrentTab") {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab?.url || !isPdfUrl(tab.url)) {
-        throw new Error("The current tab does not appear to be a PDF link or PDF page.");
-      }
-      const result = await scanPdfUrl(tab.url, { trigger: "popup-current-tab" });
-      sendResponse({ ok: true, result });
-      return;
-    }
-
-    if (message?.action === "openDashboard") {
-      const settings = await getSettings();
-      await openUrl(settings.dashboardUrl);
-      sendResponse({ ok: true });
-      return;
-    }
-
-    if (message?.action === "openOptionsPage") {
-      await chrome.runtime.openOptionsPage();
-      sendResponse({ ok: true });
-      return;
-    }
-
-    sendResponse({ ok: false, error: "Unknown extension action." });
-  })().catch((error) => {
-    sendResponse({ ok: false, error: error.message || String(error) });
+if (hasChromeApis && chrome.runtime.onInstalled) {
+  chrome.runtime.onInstalled.addListener(async () => {
+    await initializeSettings();
+    await ensureContextMenus();
   });
+}
 
-  return true;
-});
+if (hasChromeApis && chrome.runtime.onStartup) {
+  chrome.runtime.onStartup.addListener(async () => {
+    await initializeSettings();
+    await ensureContextMenus();
+  });
+}
+
+if (hasChromeApis && chrome.contextMenus && chrome.contextMenus.onClicked) {
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === CONTEXT_MENU_SCAN_LINK && info.linkUrl) {
+      scanPdfUrl(info.linkUrl, { trigger: "context-link" });
+      return;
+    }
+    if (info.menuItemId === CONTEXT_MENU_SCAN_PAGE && tab?.url) {
+      scanPdfUrl(tab.url, { trigger: "context-page" });
+    }
+  });
+}
+
+if (hasChromeApis && chrome.downloads && chrome.downloads.onChanged) {
+  chrome.downloads.onChanged.addListener((delta) => {
+    if (delta.state?.current !== "complete") {
+      return;
+    }
+    handleCompletedDownload(delta.id);
+  });
+}
+
+if (hasChromeApis && chrome.runtime.onMessage) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    (async () => {
+      if (message?.action === "getPopupState") {
+        const settings = await getSettings();
+        const backendHealth = await checkBackendHealth(settings);
+        const storageState = await chrome.storage.local.get(DEFAULT_LOCAL_STATE);
+        const backendRecentScans = await fetchRecentScans(settings);
+        const recentScans = backendRecentScans.length ? backendRecentScans : storageState.recentScans;
+
+        if (backendRecentScans.length) {
+          await chrome.storage.local.set({ recentScans: backendRecentScans });
+        }
+
+        sendResponse({
+          ok: true,
+          backendReachable: backendHealth.reachable,
+          backendMessage: backendHealth.message,
+          latestScanResult: storageState.latestScanResult,
+          recentScans,
+          settings
+        });
+        return;
+      }
+
+      if (message?.action === "scanCurrentTab") {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.url || !isPdfUrl(tab.url)) {
+          throw new Error("The current tab does not appear to be a PDF link or PDF page.");
+        }
+        const result = await scanPdfUrl(tab.url, { trigger: "popup-current-tab" });
+        sendResponse({ ok: true, result });
+        return;
+      }
+
+      if (message?.action === "openDashboard") {
+        const settings = await getSettings();
+        const clientId = await getOrCreateClientId();
+        await openUrl(buildDashboardUrl(settings.dashboardUrl, clientId));
+        sendResponse({ ok: true });
+        return;
+      }
+
+      if (message?.action === "openOptionsPage") {
+        await chrome.runtime.openOptionsPage();
+        sendResponse({ ok: true });
+        return;
+      }
+
+      sendResponse({ ok: false, error: "Unknown extension action." });
+    })().catch((error) => {
+      sendResponse({ ok: false, error: error.message || String(error) });
+    });
+
+    return true;
+  });
+}
 
 async function initializeSettings() {
   const storedSettings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
   await chrome.storage.sync.set({ ...DEFAULT_SETTINGS, ...storedSettings });
+  await getOrCreateClientId();
 }
 
 async function ensureContextMenus() {
@@ -148,6 +169,38 @@ async function getSettings() {
   return { ...DEFAULT_SETTINGS, ...storedSettings };
 }
 
+async function getOrCreateClientId() {
+  const storedValue = await chrome.storage.local.get(CLIENT_ID_STORAGE_KEY);
+  const existingClientId = normalizeStoredClientId(storedValue?.[CLIENT_ID_STORAGE_KEY]);
+  if (existingClientId) {
+    return existingClientId;
+  }
+
+  const clientId = generateClientId();
+  await chrome.storage.local.set({ [CLIENT_ID_STORAGE_KEY]: clientId });
+  return clientId;
+}
+
+function normalizeStoredClientId(value) {
+  return String(value || "").trim();
+}
+
+function generateClientId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  const randomBytes = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(randomBytes);
+  } else {
+    for (let index = 0; index < randomBytes.length; index += 1) {
+      randomBytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function handleCompletedDownload(downloadId) {
   const settings = await getSettings();
   if (!settings.autoScanDownloads) {
@@ -175,11 +228,12 @@ async function handleCompletedDownload(downloadId) {
 
 async function scanPdfUrl(url, context = {}) {
   const settings = await getSettings();
+  const clientId = await getOrCreateClientId();
 
   try {
     const response = await fetch(normalizeBaseUrl(settings.backendBaseUrl) + "/api/scan/url", {
       method: "POST",
-      headers: buildApiHeaders(settings, { includeJsonContentType: true }),
+      headers: buildApiHeaders(settings, clientId, { includeJsonContentType: true }),
       body: JSON.stringify({ url })
     });
 
@@ -201,11 +255,13 @@ async function scanPdfUrl(url, context = {}) {
 }
 
 async function fetchRecentScans(settings) {
+  const clientId = await getOrCreateClientId();
+
   try {
     const response = await fetch(
       normalizeBaseUrl(settings.backendBaseUrl) + `/api/scan/recent?limit=${MAX_RECENT_SCANS}`,
       {
-        headers: buildApiHeaders(settings)
+        headers: buildApiHeaders(settings, clientId)
       }
     );
     const payload = await response.json().catch(() => ({}));
@@ -219,9 +275,11 @@ async function fetchRecentScans(settings) {
 }
 
 async function checkBackendHealth(settings) {
+  const clientId = await getOrCreateClientId();
+
   try {
     const response = await fetch(normalizeBaseUrl(settings.backendBaseUrl) + "/api/health", {
-      headers: buildApiHeaders(settings)
+      headers: buildApiHeaders(settings, clientId)
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload.status !== "ok") {
@@ -275,11 +333,12 @@ async function maybeNotify(result, settings, context) {
   });
 
   if (result.verdictState === "malicious" && settings.autoOpenDashboardForMalicious) {
-    await openUrl(settings.dashboardUrl);
+    const clientId = await getOrCreateClientId();
+    await openUrl(buildDashboardUrl(settings.dashboardUrl, clientId));
   }
 }
 
-function buildApiHeaders(settings, { includeJsonContentType = false } = {}) {
+function buildApiHeaders(settings, clientId, { includeJsonContentType = false } = {}) {
   const headers = {};
   if (includeJsonContentType) {
     headers["Content-Type"] = "application/json";
@@ -288,7 +347,27 @@ function buildApiHeaders(settings, { includeJsonContentType = false } = {}) {
     headers[API_TOKEN_HEADER_NAME] = settings.apiToken;
     headers["Authorization"] = `Bearer ${settings.apiToken}`;
   }
+  if (normalizeStoredClientId(clientId)) {
+    headers[CLIENT_ID_HEADER_NAME] = normalizeStoredClientId(clientId);
+  }
   return headers;
+}
+
+function buildDashboardUrl(dashboardUrl, clientId) {
+  const normalizedDashboardUrl = String(dashboardUrl || DEFAULT_SETTINGS.dashboardUrl).trim();
+  const normalizedClientId = normalizeStoredClientId(clientId);
+  if (!normalizedClientId) {
+    return normalizedDashboardUrl;
+  }
+
+  try {
+    const url = new URL(normalizedDashboardUrl);
+    url.searchParams.set("client_id", normalizedClientId);
+    return url.toString();
+  } catch (error) {
+    const separator = normalizedDashboardUrl.includes("?") ? "&" : "?";
+    return `${normalizedDashboardUrl}${separator}client_id=${encodeURIComponent(normalizedClientId)}`;
+  }
 }
 
 function normalizeScanResult(payload, sourceUrl, context = {}) {
@@ -451,3 +530,16 @@ function normalizeBaseUrl(url) {
 async function openUrl(url) {
   await chrome.tabs.create({ url });
 }
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    buildApiHeaders,
+    buildDashboardUrl,
+    CLIENT_ID_HEADER_NAME,
+    CLIENT_ID_STORAGE_KEY,
+    generateClientId,
+    getOrCreateClientId,
+    normalizeStoredClientId
+  };
+}
+

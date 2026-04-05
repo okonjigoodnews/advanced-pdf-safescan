@@ -61,6 +61,7 @@ from src.reporting.zip_ingest import ZIPIngestError, extract_pdf_uploads_from_zi
 INLINE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 _HISTORY_API_RECENT_LIMIT = 250
 _HISTORY_API_TIMEOUT_SECONDS = 8
+_CLIENT_ID_HEADER_NAME = "X-Client-ID"
 _PREVIEW_CHAR_LIMITS = {
     "benign": 5000,
     "suspicious": 1800,
@@ -838,6 +839,7 @@ def _fetch_hosted_scan_history(
     *,
     base_url: str | None = None,
     api_auth_token: str | None = None,
+    client_id: str | None = None,
     limit: int = _HISTORY_API_RECENT_LIMIT,
 ) -> list[dict[str, Any]] | None:
     """Fetch recent scan history rows from the hosted API when configured."""
@@ -860,9 +862,12 @@ def _fetch_hosted_scan_history(
     resolved_api_auth_token = str(
         api_auth_token if api_auth_token is not None else os.getenv("API_AUTH_TOKEN", "")
     ).strip()
+    resolved_client_id = str(client_id or "").strip()
     if resolved_api_auth_token:
         headers[API_TOKEN_HEADER_NAME] = resolved_api_auth_token
         headers["Authorization"] = f"Bearer {resolved_api_auth_token}"
+    if resolved_client_id:
+        headers[_CLIENT_ID_HEADER_NAME] = resolved_client_id
 
     request_object = urllib.request.Request(request_url, headers=headers)
     try:
@@ -896,6 +901,35 @@ def _load_dashboard_history_records(limit: int = _HISTORY_API_RECENT_LIMIT) -> l
     if hosted_history_records is not None:
         return hosted_history_records
     return load_scan_history()
+
+
+def _load_dashboard_history_records_for_client(
+    *,
+    client_id: str,
+    limit: int = _HISTORY_API_RECENT_LIMIT,
+) -> list[dict[str, Any]]:
+    """Load dashboard history for one hosted client id, falling back locally when needed."""
+    hosted_history_records = _fetch_hosted_scan_history(
+        client_id=client_id,
+        limit=limit,
+    )
+    if hosted_history_records is not None:
+        return hosted_history_records
+    return load_scan_history()
+
+
+def _streamlit_query_param_client_id(streamlit_module: Any) -> str:
+    """Return the current dashboard client id from Streamlit query params when present."""
+    query_params = getattr(streamlit_module, "query_params", None)
+    if query_params is None:
+        return ""
+    try:
+        raw_value = query_params.get("client_id", "")
+    except Exception:
+        return ""
+    if isinstance(raw_value, list):
+        raw_value = raw_value[0] if raw_value else ""
+    return str(raw_value).strip()
 
 
 def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[str, str | int]:
@@ -2031,6 +2065,7 @@ def main() -> None:
     _inject_page_styles(streamlit_module)
     _render_page_header(streamlit_module)
     status_strip_placeholder = streamlit_module.empty()
+    dashboard_client_id = _streamlit_query_param_client_id(streamlit_module)
 
     with _get_card_container(streamlit_module):
         streamlit_module.subheader("Upload Files")
@@ -2108,7 +2143,7 @@ def main() -> None:
 
     current_signature = _build_upload_signature(uploads)
     session_state = streamlit_module.session_state
-    history_records = _load_dashboard_history_records()
+    history_records = _load_dashboard_history_records_for_client(client_id=dashboard_client_id)
 
     if analyze_clicked:
         if not uploads:
@@ -2166,7 +2201,7 @@ def main() -> None:
                 append_scan_history_records(analyzed_results)
             except OSError as history_error:
                 streamlit_module.warning(f"Analysis completed, but scan history could not be saved: {history_error}")
-            history_records = _load_dashboard_history_records()
+            history_records = _load_dashboard_history_records_for_client(client_id=dashboard_client_id)
         except (FileNotFoundError, PDFParserError, MLClassifierError, PDFReaderError, ValueError) as exc:
             streamlit_module.error(f"Analysis failed: {exc}")
             return
@@ -2260,3 +2295,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

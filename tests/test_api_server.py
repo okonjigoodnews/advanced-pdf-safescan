@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app import api_server
 from app.runtime_config import API_TOKEN_HEADER_NAME, build_runtime_config
+from src.reporting.history import load_scan_history
 
 
 class APIServerTestCase(unittest.TestCase):
@@ -148,6 +150,95 @@ class APIServerTestCase(unittest.TestCase):
         self.assertEqual(payload["items"][0]["review_status"], "Under Review")
         self.assertEqual(payload["dashboard_url"], "https://dashboard.example.com")
 
+    @patch("app.api_server.load_analyst_reviews_by_sha256")
+    @patch("app.api_server.load_scan_history")
+    def test_recent_scans_filters_history_by_request_client_id(
+        self,
+        mock_load_scan_history,
+        mock_load_analyst_reviews_by_sha256,
+    ) -> None:
+        """Return only history rows that belong to the requesting installation id."""
+        mock_load_scan_history.return_value = [
+            {
+                "timestamp": "2026-03-29T11:00:00+00:00",
+                "file_name": "client-a.pdf",
+                "sha256": "aaa111",
+                "client_id": "client-a",
+                "final_label": "suspicious",
+                "final_confidence": 0.81,
+                "rule_score": 67.0,
+                "recommendation": "Open with caution.",
+            },
+            {
+                "timestamp": "2026-03-29T11:05:00+00:00",
+                "file_name": "client-b.pdf",
+                "sha256": "bbb222",
+                "client_id": "client-b",
+                "final_label": "malicious",
+                "final_confidence": 0.98,
+                "rule_score": 92.0,
+                "recommendation": "Do not open.",
+            },
+        ]
+        mock_load_analyst_reviews_by_sha256.return_value = {}
+
+        response = self.client.get(
+            "/api/scan/recent?limit=5",
+            headers={
+                API_TOKEN_HEADER_NAME: "secret-token",
+                api_server.CLIENT_ID_HEADER_NAME: "client-a",
+            },
+        )
+        payload = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["file_name"], "client-a.pdf")
+
+    @patch("app.api_server.load_analyst_reviews_by_sha256")
+    @patch("app.api_server.load_scan_history")
+    def test_recent_scans_without_client_id_returns_only_anonymous_records(
+        self,
+        mock_load_scan_history,
+        mock_load_analyst_reviews_by_sha256,
+    ) -> None:
+        """Keep blank-client fallback scoped to older anonymous records only."""
+        mock_load_scan_history.return_value = [
+            {
+                "timestamp": "2026-03-29T11:00:00+00:00",
+                "file_name": "anonymous.pdf",
+                "sha256": "anon111",
+                "client_id": "",
+                "final_label": "benign",
+                "final_confidence": 0.91,
+                "rule_score": 4.0,
+                "recommendation": "Safe to open.",
+            },
+            {
+                "timestamp": "2026-03-29T11:05:00+00:00",
+                "file_name": "client-b.pdf",
+                "sha256": "bbb222",
+                "client_id": "client-b",
+                "final_label": "malicious",
+                "final_confidence": 0.98,
+                "rule_score": 92.0,
+                "recommendation": "Do not open.",
+            },
+        ]
+        mock_load_analyst_reviews_by_sha256.return_value = {}
+
+        response = self.client.get(
+            "/api/scan/recent?limit=5",
+            headers={API_TOKEN_HEADER_NAME: "secret-token"},
+        )
+        payload = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["file_name"], "anonymous.pdf")
+
     def test_file_scan_endpoint_rejects_missing_file(self) -> None:
         """Reject file scan requests that do not include an uploaded PDF."""
         response = self.client.post(
@@ -233,6 +324,29 @@ class APIServerTestCase(unittest.TestCase):
         self.assertEqual(payload["file_name"], "sample.pdf")
         self.assertEqual(payload["final_label"], "suspicious")
         self.assertEqual(payload["public_base_url"], "https://api.example.com")
+
+    @patch("app.api_server._scan_pdf_bytes")
+    def test_file_scan_endpoint_passes_client_id_into_scan_helper(self, mock_scan_pdf_bytes) -> None:
+        """Forward the installation id header into the shared scan helper."""
+        mock_scan_pdf_bytes.return_value = {
+            "status": "ok",
+            "cached": False,
+            "file_name": "sample.pdf",
+            "final_label": "benign",
+        }
+
+        response = self.client.post(
+            "/api/scan/file",
+            data={"file": (io.BytesIO(b"%PDF-1.7 sample"), "sample.pdf")},
+            content_type="multipart/form-data",
+            headers={
+                API_TOKEN_HEADER_NAME: "secret-token",
+                api_server.CLIENT_ID_HEADER_NAME: "client-a",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_scan_pdf_bytes.call_args.kwargs["client_id"], "client-a")
 
     def test_url_scan_endpoint_rejects_missing_payload(self) -> None:
         """Reject URL scan requests that do not provide a JSON body."""
@@ -384,18 +498,23 @@ class APIServerTestCase(unittest.TestCase):
             "file_name": "cached.pdf",
         }
 
-        payload = api_server._scan_pdf_bytes(
-            pdf_bytes=b"%PDF-1.7",
-            file_name="cached.pdf",
-            model_dir=PROJECT_ROOT / "models",
-            source_url="https://example.com/cached.pdf",
-            history_path=PROJECT_ROOT / "data" / "history" / "scan_history.json",
-            review_notes_path=PROJECT_ROOT / "data" / "history" / "analyst_reviews.json",
-        )
+        with patch("app.api_server.append_scan_history_records") as mock_append_scan_history_records:
+            payload = api_server._scan_pdf_bytes(
+                pdf_bytes=b"%PDF-1.7",
+                file_name="cached.pdf",
+                model_dir=PROJECT_ROOT / "models",
+                source_url="https://example.com/cached.pdf",
+                client_id="client-a",
+                history_path=PROJECT_ROOT / "data" / "history" / "scan_history.json",
+                review_notes_path=PROJECT_ROOT / "data" / "history" / "analyst_reviews.json",
+            )
 
         self.assertEqual(payload["status"], "ok")
         self.assertTrue(payload["cached"])
         mock_build_scan_response_from_history_record.assert_called_once()
+        mock_append_scan_history_records.assert_called_once()
+        cached_append_payload = mock_append_scan_history_records.call_args.args[0][0][1]
+        self.assertEqual(cached_append_payload["client_id"], "client-a")
 
     @patch("app.api_server.append_scan_history_records")
     @patch("app.api_server.build_scan_response_from_analysis")
@@ -451,6 +570,7 @@ class APIServerTestCase(unittest.TestCase):
             file_name="fresh.pdf",
             model_dir=PROJECT_ROOT / "models",
             source_url="https://example.com/fresh.pdf",
+            client_id="client-a",
             history_path=PROJECT_ROOT / "data" / "history" / "scan_history.json",
             review_notes_path=PROJECT_ROOT / "data" / "history" / "analyst_reviews.json",
         )
@@ -460,6 +580,34 @@ class APIServerTestCase(unittest.TestCase):
         mock_run_pdf_analysis_details.assert_called_once()
         mock_append_scan_history_records.assert_called_once()
         mock_build_scan_response_from_analysis.assert_called_once()
+        appended_analysis_result = mock_append_scan_history_records.call_args.args[0][0][1]
+        self.assertEqual(appended_analysis_result["client_id"], "client-a")
+
+    def test_load_scan_history_remains_backward_compatible_without_client_id(self) -> None:
+        """Normalize older history rows safely when client_id is missing."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "scan_history.json"
+            history_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "timestamp": "2026-03-29T10:00:00+00:00",
+                            "file_name": "legacy.pdf",
+                            "sha256": "legacy123",
+                            "final_label": "benign",
+                            "final_confidence": 0.9,
+                            "rule_score": 2.0,
+                            "recommendation": "Safe to open.",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            history_records = load_scan_history(history_path=history_path)
+
+        self.assertEqual(len(history_records), 1)
+        self.assertEqual(history_records[0]["client_id"], "")
 
     def test_json_base64_file_payload_is_accepted(self) -> None:
         """Support a lightweight JSON upload format for extension-friendly file scans."""
@@ -500,6 +648,7 @@ class APIServerTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "chrome-extension://test-extension-id")
         self.assertIn(API_TOKEN_HEADER_NAME, response.headers.get("Access-Control-Allow-Headers", ""))
+        self.assertIn(api_server.CLIENT_ID_HEADER_NAME, response.headers.get("Access-Control-Allow-Headers", ""))
 
     def test_disallowed_origin_is_rejected(self) -> None:
         """Reject requests from origins outside the configured allowlist."""
@@ -515,3 +664,4 @@ class APIServerTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

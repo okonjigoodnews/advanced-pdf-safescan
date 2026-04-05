@@ -25,6 +25,7 @@ def build_scan_history_records(
                 "timestamp": str(analysis_result.get("report_timestamp", "")),
                 "file_name": str(summary.get("file_name", "unknown")),
                 "sha256": str(analysis_result.get("sha256", "")),
+                "client_id": str(analysis_result.get("client_id", "")).strip(),
                 "final_label": str(summary.get("final_label", "unknown")),
                 "final_confidence": _safe_float(summary.get("final_confidence", 0.0)),
                 "rule_score": _safe_float(summary.get("rule_score", 0.0)),
@@ -168,6 +169,7 @@ def _normalize_history_record(record: dict[str, Any]) -> dict[str, Any]:
         "timestamp": str(record.get("timestamp", "")),
         "file_name": str(record.get("file_name", "unknown")),
         "sha256": str(record.get("sha256", "")),
+        "client_id": str(record.get("client_id", "")).strip(),
         "final_label": final_label if final_label in ALLOWED_VERDICTS else "unknown",
         "final_confidence": _safe_float(record.get("final_confidence", 0.0)),
         "rule_score": _safe_float(record.get("rule_score", 0.0)),
@@ -190,3 +192,4 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
