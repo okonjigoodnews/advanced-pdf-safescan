@@ -1,12 +1,24 @@
-const DEFAULT_SETTINGS = {
+const PROTECTED_PRODUCTION_CONFIG = Object.freeze({
   backendBaseUrl: "https://api.advanced-pdfsafescan.example",
   dashboardUrl: "https://dashboard.advanced-pdfsafescan.example",
-  apiToken: "",
+  apiToken: ""
+});
+
+const USER_PREFERENCE_DEFAULTS = Object.freeze({
   autoScanDownloads: true,
   enableNotifications: true,
   warnOnSuspicious: true,
   autoOpenDashboardForMalicious: false
-};
+});
+
+const LEGACY_SENSITIVE_SETTING_KEYS = Object.freeze([
+  "backendBaseUrl",
+  "dashboardUrl",
+  "apiToken"
+]);
+
+const ADMIN_OVERRIDE_ENABLED = false;
+const ADMIN_OVERRIDE_CONFIG = Object.freeze({});
 
 const DEFAULT_LOCAL_STATE = {
   latestScanResult: null,
@@ -95,8 +107,7 @@ if (hasChromeApis && chrome.runtime.onMessage) {
           backendReachable: backendHealth.reachable,
           backendMessage: backendHealth.message,
           latestScanResult: storageState.latestScanResult,
-          recentScans,
-          settings
+          recentScans
         });
         return;
       }
@@ -104,7 +115,7 @@ if (hasChromeApis && chrome.runtime.onMessage) {
       if (message?.action === "scanCurrentTab") {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab?.url || !isPdfUrl(tab.url)) {
-          throw new Error("The current tab does not appear to be a PDF link or PDF page.");
+          throw new Error("The current tab does not appear to be a supported PDF page.");
         }
         const result = await scanPdfUrl(tab.url, { trigger: "popup-current-tab" });
         sendResponse({ ok: true, result });
@@ -135,8 +146,11 @@ if (hasChromeApis && chrome.runtime.onMessage) {
 }
 
 async function initializeSettings() {
-  const storedSettings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
-  await chrome.storage.sync.set({ ...DEFAULT_SETTINGS, ...storedSettings });
+  const storedSettings = await chrome.storage.sync.get(USER_PREFERENCE_DEFAULTS);
+  await chrome.storage.sync.set(sanitizeUserPreferences(storedSettings));
+  if (chrome.storage?.sync?.remove) {
+    await chrome.storage.sync.remove([...LEGACY_SENSITIVE_SETTING_KEYS]);
+  }
   await getOrCreateClientId();
 }
 
@@ -164,9 +178,40 @@ async function ensureContextMenus() {
   });
 }
 
+function getProtectedRuntimeConfig() {
+  if (!ADMIN_OVERRIDE_ENABLED) {
+    return { ...PROTECTED_PRODUCTION_CONFIG };
+  }
+  return {
+    ...PROTECTED_PRODUCTION_CONFIG,
+    ...ADMIN_OVERRIDE_CONFIG
+  };
+}
+
+function sanitizeUserPreferences(storedSettings = {}) {
+  return {
+    autoScanDownloads:
+      storedSettings.autoScanDownloads ?? USER_PREFERENCE_DEFAULTS.autoScanDownloads,
+    enableNotifications:
+      storedSettings.enableNotifications ?? USER_PREFERENCE_DEFAULTS.enableNotifications,
+    warnOnSuspicious:
+      storedSettings.warnOnSuspicious ?? USER_PREFERENCE_DEFAULTS.warnOnSuspicious,
+    autoOpenDashboardForMalicious:
+      storedSettings.autoOpenDashboardForMalicious ??
+      USER_PREFERENCE_DEFAULTS.autoOpenDashboardForMalicious
+  };
+}
+
+function buildEffectiveSettings(storedSettings = {}) {
+  return {
+    ...getProtectedRuntimeConfig(),
+    ...sanitizeUserPreferences(storedSettings)
+  };
+}
+
 async function getSettings() {
-  const storedSettings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
-  return { ...DEFAULT_SETTINGS, ...storedSettings };
+  const storedSettings = await chrome.storage.sync.get(USER_PREFERENCE_DEFAULTS);
+  return buildEffectiveSettings(storedSettings);
 }
 
 async function getOrCreateClientId() {
@@ -354,7 +399,7 @@ function buildApiHeaders(settings, clientId, { includeJsonContentType = false } 
 }
 
 function buildDashboardUrl(dashboardUrl, clientId) {
-  const normalizedDashboardUrl = String(dashboardUrl || DEFAULT_SETTINGS.dashboardUrl).trim();
+  const normalizedDashboardUrl = String(dashboardUrl || PROTECTED_PRODUCTION_CONFIG.dashboardUrl).trim();
   const normalizedClientId = normalizeStoredClientId(clientId);
   if (!normalizedClientId) {
     return normalizedDashboardUrl;
@@ -371,10 +416,11 @@ function buildDashboardUrl(dashboardUrl, clientId) {
 }
 
 function normalizeScanResult(payload, sourceUrl, context = {}) {
-  const fileName = context.downloadedFilename || payload.file_name || sourceUrl;
+  const fileName = context.downloadedFilename || payload.file_name || sourceUrl || "Scanned PDF";
   return {
     ...payload,
     source_url: payload.source_url || sourceUrl,
+    file_type: "pdf",
     file_name: fileName,
     verdictState: mapVerdictState(payload.final_label),
     final_confidence: Number(payload.final_confidence || 0),
@@ -386,7 +432,8 @@ function normalizeScanResult(payload, sourceUrl, context = {}) {
 function normalizeRecentItem(item) {
   return {
     timestamp: item.timestamp || new Date().toISOString(),
-    file_name: item.file_name || item.source_url || "PDF Scan",
+    file_type: "pdf",
+    file_name: item.file_name || item.source_url || "Scanned PDF",
     final_label: item.final_label || "unknown",
     final_confidence: Number(item.final_confidence || 0),
     rule_score: Number(item.rule_score || 0),
@@ -403,12 +450,13 @@ function buildFailedResult(url, error, context = {}) {
   return {
     status: "error",
     timestamp: new Date().toISOString(),
-    file_name: context.downloadedFilename || url,
+    file_type: "pdf",
+    file_name: context.downloadedFilename || url || "Scanned PDF",
     source_url: url,
     final_label: "failed",
     final_confidence: 0,
     rule_score: 0,
-    recommendation: "Hosted API unavailable or scan failed. Check the backend URL and API token in extension settings.",
+    recommendation: "The secure hosted PDF scanner could not complete the scan. Contact your administrator if this persists.",
     review_status: "New",
     priority: "Medium",
     disposition: "",
@@ -421,6 +469,7 @@ function buildUnavailableDownloadResult(downloadItem) {
   return {
     status: "error",
     timestamp: new Date().toISOString(),
+    file_type: "pdf",
     file_name: downloadItem.filename || "Downloaded PDF",
     source_url: "",
     final_label: "failed",
@@ -461,10 +510,6 @@ function notificationTitle(result, fromDownload) {
 function notificationMessage(result, fromDownload) {
   if (result.verdictState === "failed") {
     return result.message || "The hosted API server could not complete the scan.";
-  }
-
-  if (fromDownload) {
-    return `${result.file_name}\nVerdict: ${formatVerdictLabel(result.final_label)} | Confidence: ${result.final_confidence.toFixed(2)} | Rule score: ${result.rule_score.toFixed(2)}`;
   }
 
   return `${result.file_name}\nVerdict: ${formatVerdictLabel(result.final_label)} | Confidence: ${result.final_confidence.toFixed(2)} | Rule score: ${result.rule_score.toFixed(2)}`;
@@ -523,8 +568,12 @@ function isPdfUrl(url) {
   return /\.pdf(?:$|[?#])/i.test(String(url || ""));
 }
 
+function isScannableUrl(url) {
+  return isPdfUrl(url);
+}
+
 function normalizeBaseUrl(url) {
-  return String(url || DEFAULT_SETTINGS.backendBaseUrl).replace(/\/$/, "");
+  return String(url || PROTECTED_PRODUCTION_CONFIG.backendBaseUrl).replace(/\/$/, "");
 }
 
 async function openUrl(url) {
@@ -533,13 +582,23 @@ async function openUrl(url) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    ADMIN_OVERRIDE_ENABLED,
+    API_TOKEN_HEADER_NAME,
     buildApiHeaders,
     buildDashboardUrl,
+    buildEffectiveSettings,
     CLIENT_ID_HEADER_NAME,
     CLIENT_ID_STORAGE_KEY,
     generateClientId,
     getOrCreateClientId,
-    normalizeStoredClientId
+    getProtectedRuntimeConfig,
+    initializeSettings,
+    isLikelyPdfDownload,
+    isPdfUrl,
+    isScannableUrl,
+    normalizeStoredClientId,
+    PROTECTED_PRODUCTION_CONFIG,
+    sanitizeUserPreferences,
+    USER_PREFERENCE_DEFAULTS
   };
 }
-

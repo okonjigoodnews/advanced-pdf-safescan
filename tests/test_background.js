@@ -1,33 +1,46 @@
 const assert = require("node:assert/strict");
 
-const storageState = {};
+const syncState = {
+  backendBaseUrl: "https://evil.example.com",
+  dashboardUrl: "https://evil-dashboard.example.com",
+  apiToken: "user-supplied-token",
+  autoScanDownloads: false,
+  enableNotifications: true,
+  warnOnSuspicious: false,
+  autoOpenDashboardForMalicious: true
+};
+const localState = {};
 
-Object.defineProperty(globalThis, "crypto", {
-  value: {
-    randomUUID() {
-      return "client-test-id";
-    }
-  },
-  configurable: true
-});
+global.crypto = {
+  randomUUID() {
+    return "client-test-id";
+  }
+};
 
 global.chrome = {
   storage: {
     sync: {
       async get(defaults) {
-        return defaults;
+        return { ...defaults, ...syncState };
       },
-      async set() {}
+      async set(values) {
+        Object.assign(syncState, values);
+      },
+      async remove(keys) {
+        for (const key of keys) {
+          delete syncState[key];
+        }
+      }
     },
     local: {
       async get(keyOrDefaults) {
         if (typeof keyOrDefaults === "string") {
-          return { [keyOrDefaults]: storageState[keyOrDefaults] };
+          return { [keyOrDefaults]: localState[keyOrDefaults] };
         }
-        return { ...keyOrDefaults, ...storageState };
+        return { ...keyOrDefaults, ...localState };
       },
       async set(values) {
-        Object.assign(storageState, values);
+        Object.assign(localState, values);
       }
     }
   },
@@ -59,11 +72,22 @@ global.chrome = {
 };
 
 const {
+  ADMIN_OVERRIDE_ENABLED,
+  API_TOKEN_HEADER_NAME,
   buildApiHeaders,
   buildDashboardUrl,
+  buildEffectiveSettings,
   CLIENT_ID_HEADER_NAME,
   CLIENT_ID_STORAGE_KEY,
-  getOrCreateClientId
+  getOrCreateClientId,
+  getProtectedRuntimeConfig,
+  initializeSettings,
+  isLikelyPdfDownload,
+  isPdfUrl,
+  isScannableUrl,
+  PROTECTED_PRODUCTION_CONFIG,
+  sanitizeUserPreferences,
+  USER_PREFERENCE_DEFAULTS
 } = require("../chrome_extension/background.js");
 
 async function run() {
@@ -72,26 +96,75 @@ async function run() {
 
   assert.equal(firstClientId, "client-test-id");
   assert.equal(secondClientId, "client-test-id");
-  assert.equal(storageState[CLIENT_ID_STORAGE_KEY], "client-test-id");
+  assert.equal(localState[CLIENT_ID_STORAGE_KEY], "client-test-id");
+
+  assert.equal(ADMIN_OVERRIDE_ENABLED, false);
+  assert.deepEqual(getProtectedRuntimeConfig(), PROTECTED_PRODUCTION_CONFIG);
+
+  await initializeSettings();
+  assert.equal("backendBaseUrl" in syncState, false);
+  assert.equal("dashboardUrl" in syncState, false);
+  assert.equal("apiToken" in syncState, false);
+
+  assert.deepEqual(
+    sanitizeUserPreferences({
+      autoScanDownloads: false,
+      enableNotifications: false,
+      warnOnSuspicious: true,
+      autoOpenDashboardForMalicious: true,
+      backendBaseUrl: "https://evil.example.com",
+      apiToken: "should-not-be-kept"
+    }),
+    {
+      autoScanDownloads: false,
+      enableNotifications: false,
+      warnOnSuspicious: true,
+      autoOpenDashboardForMalicious: true
+    }
+  );
+
+  const effectiveSettings = buildEffectiveSettings(syncState);
+  assert.equal(effectiveSettings.backendBaseUrl, PROTECTED_PRODUCTION_CONFIG.backendBaseUrl);
+  assert.equal(effectiveSettings.dashboardUrl, PROTECTED_PRODUCTION_CONFIG.dashboardUrl);
+  assert.equal(effectiveSettings.apiToken, PROTECTED_PRODUCTION_CONFIG.apiToken);
+  assert.equal(effectiveSettings.autoScanDownloads, false);
+  assert.equal(effectiveSettings.enableNotifications, true);
+  assert.equal(effectiveSettings.warnOnSuspicious, false);
+  assert.equal(effectiveSettings.autoOpenDashboardForMalicious, true);
 
   const headers = buildApiHeaders(
-    { apiToken: "secret-token" },
+    { ...PROTECTED_PRODUCTION_CONFIG, apiToken: "secure-token" },
     "client-test-id",
     { includeJsonContentType: true }
   );
   assert.equal(headers["Content-Type"], "application/json");
-  assert.equal(headers["X-API-Token"], "secret-token");
-  assert.equal(headers["Authorization"], "Bearer secret-token");
+  assert.equal(headers[API_TOKEN_HEADER_NAME], "secure-token");
+  assert.equal(headers["Authorization"], "Bearer secure-token");
   assert.equal(headers[CLIENT_ID_HEADER_NAME], "client-test-id");
 
   assert.equal(
     buildDashboardUrl("https://dashboard.example.com", "client-test-id"),
     "https://dashboard.example.com/?client_id=client-test-id"
   );
+
+  assert.equal(isPdfUrl("https://example.com/sample.pdf"), true);
+  assert.equal(isScannableUrl("https://example.com/sample.pdf"), true);
+  assert.equal(isScannableUrl("https://example.com/phish.png"), false);
   assert.equal(
-    buildDashboardUrl("https://dashboard.example.com/view?tab=history", "client-test-id"),
-    "https://dashboard.example.com/view?tab=history&client_id=client-test-id"
+    isLikelyPdfDownload({ filename: "report.pdf", mime: "application/pdf", url: "" }),
+    true
   );
+  assert.equal(
+    isLikelyPdfDownload({ filename: "capture.jpg", mime: "image/jpeg", url: "" }),
+    false
+  );
+
+  assert.deepEqual(USER_PREFERENCE_DEFAULTS, {
+    autoScanDownloads: true,
+    enableNotifications: true,
+    warnOnSuspicious: true,
+    autoOpenDashboardForMalicious: false
+  });
 }
 
 run().catch((error) => {

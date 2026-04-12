@@ -1258,7 +1258,7 @@ def _build_sticky_verdict_bar_html(
                 "PDF B",
                 _verdict_badge_html(str(summary_b.get("final_label", "unknown"))),
             ),
-            _sticky_bar_item_html("Riskier File", html.escape(str(comparison["riskier_file"]))),
+            _sticky_bar_item_html("Riskier PDF", html.escape(str(comparison["riskier_file"]))),
             _sticky_bar_item_html(
                 "Verdict Match",
                 html.escape("Same" if comparison["same_final_label"] else "Different"),
@@ -1267,10 +1267,10 @@ def _build_sticky_verdict_bar_html(
     else:
         counts = _count_verdicts(analyzed_results)
         items = [
-            _sticky_bar_item_html("Total Files", html.escape(str(len(analyzed_results)))),
+            _sticky_bar_item_html("Total PDFs", html.escape(str(len(analyzed_results)))),
             _sticky_bar_item_html("Malicious", html.escape(str(counts["malicious"]))),
             _sticky_bar_item_html("Suspicious", html.escape(str(counts["suspicious"]))),
-            _sticky_bar_item_html("Riskiest File", html.escape(_select_riskiest_file(analyzed_results))),
+            _sticky_bar_item_html("Riskiest PDF", html.escape(_select_riskiest_file(analyzed_results))),
         ]
 
     return (
@@ -1749,7 +1749,7 @@ def _render_results_dashboard(
                     _verdict_badge_html(str(summary.get("final_label", "unknown"))),
                     unsafe_allow_html=True,
                 )
-            dashboard_cols[1].metric("Riskier File", str(summary.get("file_name", "PDF A")))
+            dashboard_cols[1].metric("Riskier PDF", str(summary.get("file_name", "PDF A")))
             dashboard_cols[2].metric("Higher Rule Score", str(summary.get("file_name", "PDF A")))
             dashboard_cols[3].metric("Verdict Match", "Single File")
             return
@@ -1772,7 +1772,7 @@ def _render_results_dashboard(
                     _verdict_badge_html(str(summary_b.get("final_label", "unknown"))),
                     unsafe_allow_html=True,
                 )
-            dashboard_cols[2].metric("Riskier File", comparison["riskier_file"])
+            dashboard_cols[2].metric("Riskier PDF", comparison["riskier_file"])
             dashboard_cols[3].metric("Higher Rule Score", comparison["higher_rule_score_file"])
             dashboard_cols[4].metric(
                 "Verdict Match",
@@ -1782,7 +1782,7 @@ def _render_results_dashboard(
 
         counts = _count_verdicts(analyzed_results)
         dashboard_cols = streamlit_module.columns(4)
-        dashboard_cols[0].metric("Total Files", str(len(analyzed_results)))
+        dashboard_cols[0].metric("Total PDFs", str(len(analyzed_results)))
         dashboard_cols[1].metric("Benign", str(counts["benign"]))
         dashboard_cols[2].metric("Suspicious", str(counts["suspicious"]))
         dashboard_cols[3].metric("Malicious", str(counts["malicious"]))
@@ -1802,7 +1802,7 @@ def _render_analytics_dashboard(
     with _get_card_container(streamlit_module):
         streamlit_module.subheader("Analytics Dashboard")
         metric_cols = streamlit_module.columns(4)
-        metric_cols[0].metric("Total Files Analyzed", str(len(analyzed_results)))
+        metric_cols[0].metric("Total PDFs Analyzed", str(len(analyzed_results)))
         metric_cols[1].metric("Benign", str(counts["benign"]))
         metric_cols[2].metric("Suspicious", str(counts["suspicious"]))
         metric_cols[3].metric("Malicious", str(counts["malicious"]))
@@ -1843,7 +1843,7 @@ def _render_batch_summary(
     with _get_card_container(streamlit_module):
         streamlit_module.subheader("Batch Analysis Overview")
         metric_cols = streamlit_module.columns(4)
-        metric_cols[0].metric("Total Files", str(len(analyzed_results)))
+        metric_cols[0].metric("Total PDFs", str(len(analyzed_results)))
         metric_cols[1].metric("Benign", str(counts["benign"]))
         metric_cols[2].metric("Suspicious", str(counts["suspicious"]))
         metric_cols[3].metric("Malicious", str(counts["malicious"]))
@@ -2045,7 +2045,7 @@ def _render_comparison_overview(
             )
 
         metric_col_1, metric_col_2, metric_col_3, metric_col_4 = streamlit_module.columns(4)
-        metric_col_1.metric("Riskier File", comparison["riskier_file"])
+        metric_col_1.metric("Riskier PDF", comparison["riskier_file"])
         metric_col_2.metric("Higher Rule Score", comparison["higher_rule_score_file"])
         metric_col_3.metric(
             "More Indicators",
@@ -2068,7 +2068,7 @@ def main() -> None:
     dashboard_client_id = _streamlit_query_param_client_id(streamlit_module)
 
     with _get_card_container(streamlit_module):
-        streamlit_module.subheader("Upload Files")
+        streamlit_module.subheader("Upload PDFs")
         streamlit_module.caption(
             "Upload one PDF for focused analysis, two PDFs for direct comparison, multiple PDFs for batch review, "
             "or one ZIP archive for staged intake."
@@ -2126,7 +2126,7 @@ def main() -> None:
             model_dir_input = streamlit_module.text_input("Model directory", value="models")
 
         analyze_clicked = streamlit_module.button(
-            "Analyze Files",
+            "Analyze PDFs",
             type="primary",
             use_container_width=True,
         )
@@ -2275,7 +2275,7 @@ def main() -> None:
 
     analysis_by_name = _render_batch_summary(streamlit_module, analyzed_results)
     selected_file_name = streamlit_module.selectbox(
-        "Inspect one file in detail",
+        "Inspect one PDF in detail",
         options=list(analysis_by_name.keys()),
         key="batch_detail_select",
     )
@@ -2287,7 +2287,7 @@ def main() -> None:
     )
     _render_analysis_panel(
         streamlit_module,
-        title=f"Detailed View: {selected_file_name}",
+        title=f"Detailed PDF View: {selected_file_name}",
         analysis_result=selected_analysis,
         key_prefix=selected_key_prefix,
     )

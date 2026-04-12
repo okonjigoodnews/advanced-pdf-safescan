@@ -1,12 +1,10 @@
-const DEFAULT_SETTINGS = {
-  backendBaseUrl: "https://api.advanced-pdfsafescan.example",
-  dashboardUrl: "https://dashboard.advanced-pdfsafescan.example",
-  apiToken: "",
+const USER_PREFERENCE_DEFAULTS = {
   autoScanDownloads: true,
   enableNotifications: true,
   warnOnSuspicious: true,
   autoOpenDashboardForMalicious: false
 };
+const LEGACY_SENSITIVE_SETTING_KEYS = ["backendBaseUrl", "dashboardUrl", "apiToken"];
 
 const form = document.getElementById("settings-form");
 const resetDefaultsButton = document.getElementById("reset-defaults");
@@ -17,11 +15,8 @@ form.addEventListener("submit", saveSettings);
 resetDefaultsButton.addEventListener("click", resetDefaults);
 
 async function loadSettings() {
-  const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+  const settings = await chrome.storage.sync.get(USER_PREFERENCE_DEFAULTS);
 
-  document.getElementById("backendBaseUrl").value = settings.backendBaseUrl || DEFAULT_SETTINGS.backendBaseUrl;
-  document.getElementById("dashboardUrl").value = settings.dashboardUrl || DEFAULT_SETTINGS.dashboardUrl;
-  document.getElementById("apiToken").value = settings.apiToken || DEFAULT_SETTINGS.apiToken;
   document.getElementById("autoScanDownloads").checked = Boolean(settings.autoScanDownloads);
   document.getElementById("enableNotifications").checked = Boolean(settings.enableNotifications);
   document.getElementById("warnOnSuspicious").checked = Boolean(settings.warnOnSuspicious);
@@ -32,9 +27,6 @@ async function saveSettings(event) {
   event.preventDefault();
 
   const settings = {
-    backendBaseUrl: document.getElementById("backendBaseUrl").value.trim() || DEFAULT_SETTINGS.backendBaseUrl,
-    dashboardUrl: document.getElementById("dashboardUrl").value.trim() || DEFAULT_SETTINGS.dashboardUrl,
-    apiToken: document.getElementById("apiToken").value.trim(),
     autoScanDownloads: document.getElementById("autoScanDownloads").checked,
     enableNotifications: document.getElementById("enableNotifications").checked,
     warnOnSuspicious: document.getElementById("warnOnSuspicious").checked,
@@ -42,11 +34,17 @@ async function saveSettings(event) {
   };
 
   await chrome.storage.sync.set(settings);
-  saveStatus.textContent = "Settings saved.";
+  if (chrome.storage?.sync?.remove) {
+    await chrome.storage.sync.remove(LEGACY_SENSITIVE_SETTING_KEYS);
+  }
+  saveStatus.textContent = "Preferences saved.";
 }
 
 async function resetDefaults() {
-  await chrome.storage.sync.set(DEFAULT_SETTINGS);
+  await chrome.storage.sync.set(USER_PREFERENCE_DEFAULTS);
+  if (chrome.storage?.sync?.remove) {
+    await chrome.storage.sync.remove(LEGACY_SENSITIVE_SETTING_KEYS);
+  }
   await loadSettings();
-  saveStatus.textContent = "Defaults restored.";
+  saveStatus.textContent = "Default preferences restored.";
 }

@@ -67,7 +67,7 @@ function renderScanResult(result) {
   if (!result) {
     latestVerdictBadge.textContent = "No scans yet";
     latestVerdictBadge.className = "verdict-badge verdict-failed";
-    resultFile.textContent = "Right-click a PDF link to scan it.";
+    resultFile.textContent = "Right-click a PDF link or PDF page to scan it.";
     resultState.textContent = "Idle";
     metricConfidence.textContent = "0.00";
     metricRuleScore.textContent = "0.00";
@@ -78,7 +78,7 @@ function renderScanResult(result) {
   const verdictState = result.verdictState || mapVerdictState(result.final_label);
   latestVerdictBadge.textContent = formatVerdictLabel(result.final_label);
   latestVerdictBadge.className = `verdict-badge ${verdictClass(verdictState)}`;
-  resultFile.textContent = result.file_name || result.source_url || "PDF Scan";
+  resultFile.textContent = result.file_name || result.source_url || "Scanned PDF";
   resultState.textContent = result.cached ? "Cached Result" : "Fresh Scan";
   metricConfidence.textContent = Number(result.final_confidence || 0).toFixed(2);
   metricRuleScore.textContent = Number(result.rule_score || 0).toFixed(2);
@@ -98,7 +98,8 @@ function renderRecentScans(recentScans) {
     const listItem = document.createElement("li");
     listItem.className = "recent-item";
     listItem.innerHTML = `
-      <div class="recent-title">${escapeHtml(item.file_name || "PDF Scan")}</div>
+      <div class="recent-title">${escapeHtml(item.file_name || "Scanned PDF")}</div>
+      <div class="recent-meta">PDF</div>
       <div class="recent-meta">${escapeHtml(item.timestamp || "")}</div>
       <div class="recent-footer">
         <span class="verdict-badge ${verdictClass(verdictState)}">${escapeHtml(formatVerdictLabel(item.final_label))}</span>
@@ -114,7 +115,8 @@ function renderFailedState(message) {
   renderScanResult({
     final_label: "failed",
     verdictState: "failed",
-    file_name: "Local API server",
+    file_name: "Hosted PDF Scanner",
+    file_type: "pdf",
     recommendation: message,
     final_confidence: 0,
     rule_score: 0
