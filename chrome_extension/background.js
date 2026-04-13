@@ -1,7 +1,7 @@
 const PROTECTED_PRODUCTION_CONFIG = Object.freeze({
   backendBaseUrl: "https://advanced-pdf-safescan-api.onrender.com",
   dashboardUrl: "https://advanced-pdfsafescan-dashboard.onrender.com",
-  apiToken: ""
+  apiToken: "choose-a-strong-secret-token-here "
 });
 
 const USER_PREFERENCE_DEFAULTS = Object.freeze({
