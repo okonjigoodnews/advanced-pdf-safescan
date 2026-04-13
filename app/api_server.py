@@ -131,6 +131,28 @@ def create_app(
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Max-Age"] = "3600"
         return response
+        
+            @app.route("/", methods=["GET"])
+    def index():
+        return jsonify({
+            "status": "ok",
+            "message": "Advanced PDFSafeScan backend is running",
+            "dashboard_url": runtime_config.dashboard_public_url
+        })
+
+    @app.route("/api/health", methods=["GET"], provide_automatic_options=False)
+    def health() -> Any:
+        return jsonify(
+            {
+                "status": "ok",
+                "service": runtime_config.service_name,
+                "timestamp": _utc_timestamp(),
+                "mode": "local-development" if runtime_config.is_local_development else "hosted",
+                "public_base_url": runtime_config.public_base_url,
+                "dashboard_url": runtime_config.dashboard_public_url,
+                "authentication_required": bool(runtime_config.api_auth_token),
+            }
+        )
 
     @app.route("/api/health", methods=["GET"], provide_automatic_options=False)
     def health() -> Any:
@@ -677,11 +699,5 @@ def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-# add this route
-@app.route("/")
-def index():
-    return {"status": "ok", "message": "Advanced PDFSafeScan backend is running"}
 
 
