@@ -679,4 +679,9 @@ def _utc_timestamp() -> str:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+# add this route
+@app.route("/")
+def index():
+    return {"status": "ok", "message": "Advanced PDFSafeScan backend is running"}
+
 
