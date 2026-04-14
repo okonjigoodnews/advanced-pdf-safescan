@@ -131,8 +131,9 @@ def create_app(
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Max-Age"] = "3600"
         return response
-        
-            @app.route("/", methods=["GET"])
+
+    # BUG 1 FIXED: index() is now correctly dedented outside add_cors_headers
+    @app.route("/", methods=["GET"])
     def index():
         return jsonify({
             "status": "ok",
@@ -140,20 +141,7 @@ def create_app(
             "dashboard_url": runtime_config.dashboard_public_url
         })
 
-    @app.route("/api/health", methods=["GET"], provide_automatic_options=False)
-    def health() -> Any:
-        return jsonify(
-            {
-                "status": "ok",
-                "service": runtime_config.service_name,
-                "timestamp": _utc_timestamp(),
-                "mode": "local-development" if runtime_config.is_local_development else "hosted",
-                "public_base_url": runtime_config.public_base_url,
-                "dashboard_url": runtime_config.dashboard_public_url,
-                "authentication_required": bool(runtime_config.api_auth_token),
-            }
-        )
-
+    # BUG 2 FIXED: Removed duplicate health() definition, keeping only this one with docstring
     @app.route("/api/health", methods=["GET"], provide_automatic_options=False)
     def health() -> Any:
         """Return a simple deployment-aware health payload."""
@@ -534,11 +522,13 @@ def _scan_pdf_bytes(
             [("extension_api_cached", cached_analysis_result)],
             history_path=history_path,
         )
+        # BUG 3 FIXED: Pass client_id so the response is scoped to the correct client
         return build_scan_response_from_history_record(
             cached_history_record,
             source_url=source_url,
             cached=True,
             review_record=cached_review_record,
+            client_id=client_id,
         )
 
     classifier = _get_classifier(model_dir=model_dir)
@@ -697,7 +687,3 @@ def _safe_int(value: Any, default: int) -> int:
 def _utc_timestamp() -> str:
     """Return an ISO 8601 UTC timestamp string."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-
-
