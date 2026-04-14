@@ -39,6 +39,18 @@ def build_scan_response_from_analysis(
     summary = analysis_result.get("summary", {})
     review_fields = _normalize_review_fields(review_record)
 
+    # Pull final_confidence and rule_score from summary directly
+    final_confidence = _safe_float(
+        summary.get("final_confidence")
+        or summary.get("confidence")
+        or 0.0
+    )
+    rule_score = _safe_float(
+        summary.get("rule_score")
+        or summary.get("risk_score_normalized")
+        or 0.0
+    )
+
     return {
         "status": "ok",
         "cached": bool(cached),
@@ -47,11 +59,11 @@ def build_scan_response_from_analysis(
         "file_name": str(summary.get("file_name", "unknown")),
         "sha256": str(analysis_result.get("sha256", "")),
         "final_label": str(summary.get("final_label", "unknown")),
-        "final_confidence": float(summary.get("final_confidence", 0.0)),
-        "rule_score": float(summary.get("rule_score", 0.0)),
+        "final_confidence": final_confidence,
+        "rule_score": rule_score,
         "rule_severity": str(summary.get("rule_severity", "unknown")),
         "ml_label": str(summary.get("ml_label", "unknown")),
-        "ml_confidence": float(summary.get("ml_confidence", 0.0)),
+        "ml_confidence": _safe_float(summary.get("ml_confidence", 0.0)),
         "triggered_rules": list(summary.get("triggered_rules", []) or []),
         "explanations": list(summary.get("explanations", []) or []),
         "suspicious_indicators_found": list(summary.get("suspicious_indicators_found", []) or []),
@@ -69,6 +81,7 @@ def build_scan_response_from_history_record(
     source_url: str = "",
     cached: bool = True,
     review_record: dict[str, Any] | None = None,
+    client_id: str = "",  # FIX: added client_id parameter to match hosted_api.py call
 ) -> dict[str, Any]:
     """Build an extension/API response from a cached history record."""
     review_fields = _normalize_review_fields(review_record)
@@ -81,11 +94,11 @@ def build_scan_response_from_history_record(
         "file_name": str(history_record.get("file_name", "unknown")),
         "sha256": str(history_record.get("sha256", "")),
         "final_label": str(history_record.get("final_label", "unknown")),
-        "final_confidence": float(history_record.get("final_confidence", 0.0)),
-        "rule_score": float(history_record.get("rule_score", 0.0)),
+        "final_confidence": _safe_float(history_record.get("final_confidence", 0.0)),
+        "rule_score": _safe_float(history_record.get("rule_score", 0.0)),
         "rule_severity": str(history_record.get("rule_severity", "unknown")),
         "ml_label": str(history_record.get("ml_label", "unknown")),
-        "ml_confidence": float(history_record.get("ml_confidence", 0.0)),
+        "ml_confidence": _safe_float(history_record.get("ml_confidence", 0.0)),
         "triggered_rules": list(history_record.get("triggered_rules", []) or []),
         "explanations": list(history_record.get("explanations", []) or []),
         "suspicious_indicators_found": list(history_record.get("suspicious_indicators_found", []) or []),
@@ -122,8 +135,8 @@ def build_recent_scan_rows(
                 "file_name": str(record.get("file_name", "unknown")),
                 "sha256": sha256,
                 "final_label": str(record.get("final_label", "unknown")),
-                "final_confidence": float(record.get("final_confidence", 0.0)),
-                "rule_score": float(record.get("rule_score", 0.0)),
+                "final_confidence": _safe_float(record.get("final_confidence", 0.0)),
+                "rule_score": _safe_float(record.get("rule_score", 0.0)),
                 "recommendation": str(record.get("recommendation", "")),
                 "review_status": review_fields["review_status"],
                 "priority": review_fields["priority"],
@@ -143,3 +156,11 @@ def _normalize_review_fields(review_record: dict[str, Any] | None) -> dict[str, 
         "disposition": str(review_record.get("disposition", "")),
         "analyst_note": str(review_record.get("analyst_note", "")),
     }
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Convert a value to float safely."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
