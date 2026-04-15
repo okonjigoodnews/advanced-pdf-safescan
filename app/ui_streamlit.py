@@ -1524,7 +1524,7 @@ def _render_analyst_review_section(
 
     save_clicked = streamlit_module.button(
         "Save Analyst Review",
-        use_container_width=True,
+        width="stretch",
         key=_widget_key(key_prefix, "save_review"),
     )
     if save_clicked:
@@ -1818,7 +1818,7 @@ def _render_analytics_dashboard(
             streamlit_module.bar_chart(confidence_chart_rows, x="file_name", y="confidence")
 
         streamlit_module.subheader("Analyzed Files Table")
-        streamlit_module.dataframe(dashboard_rows, use_container_width=True)
+        streamlit_module.dataframe(dashboard_rows, width="stretch")
         streamlit_module.download_button(
             label="Download Dashboard CSV",
             data=build_csv_export_bytes(dashboard_rows),
@@ -1849,7 +1849,7 @@ def _render_batch_summary(
         metric_cols[3].metric("Malicious", str(counts["malicious"]))
 
         streamlit_module.subheader("Batch Results Summary")
-        streamlit_module.dataframe(rows, use_container_width=True)
+        streamlit_module.dataframe(rows, width="stretch")
         streamlit_module.download_button(
             label="Download Batch Summary CSV",
             data=build_csv_export_bytes(rows),
@@ -1939,7 +1939,7 @@ def _render_scan_history_section(
         streamlit_module.caption(
             "Review workflow columns show the latest saved analyst note, status, priority, and disposition."
         )
-        streamlit_module.dataframe(display_rows, use_container_width=True)
+        streamlit_module.dataframe(display_rows, width="stretch")
         streamlit_module.download_button(
             label="Download Scan History CSV",
             data=build_csv_export_bytes(display_rows, fieldnames=_HISTORY_EXPORT_FIELDNAMES),
@@ -2001,7 +2001,7 @@ def _render_high_risk_workflow_section(
         streamlit_module.caption(
             "Analyst review fields help track triage ownership and final handling decisions for risky files."
         )
-        streamlit_module.dataframe(high_risk_rows, use_container_width=True)
+        streamlit_module.dataframe(high_risk_rows, width="stretch")
         if malicious_rows:
             streamlit_module.download_button(
                 label="Download Malicious CSV",
@@ -2128,7 +2128,7 @@ def main() -> None:
         analyze_clicked = streamlit_module.button(
             "Analyze PDFs",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     uploads: list[tuple[str, Any]] = []
@@ -2295,4 +2295,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
