@@ -8,4 +8,4 @@ enableXsrfProtection = false
 [browser]
 gatherUsageStats = false
 serverAddress = "advanced-pdfsafescan-dashboard.onrender.com"
-serverPort = 443
+serverPort = 10000
