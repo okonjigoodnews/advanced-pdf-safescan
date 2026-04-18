@@ -558,9 +558,9 @@ def _save_uploaded_pdf(uploaded_file: Any) -> Path:
         return Path(temp_file.name)
 
 
-def _run_pipeline(pdf_path: Path, classifier: MalwareClassifier) -> dict[str, Any]:
+def _run_pipeline(pdf_path: Path, classifier: MalwareClassifier, *, file_name: str = "", sha256: str = "") -> dict[str, Any]:
     """Run the full backend detection pipeline and return all key outputs."""
-    return run_pdf_analysis_details(pdf_path, classifier)
+    return run_pdf_analysis_details(pdf_path, classifier, file_name=file_name, sha256=sha256)
 
 
 def _read_pdf_details(pdf_path: Path) -> dict[str, Any]:
@@ -574,20 +574,25 @@ def _analyze_uploaded_pdf(uploaded_file: Any, classifier: MalwareClassifier) -> 
     pdf_bytes = uploaded_file.getvalue()
     temp_pdf_path: Path | None = None
     try:
+        real_file_name = getattr(uploaded_file, "name", "uploaded.pdf")
         temp_pdf_path = _save_uploaded_pdf(uploaded_file)
-        results = _run_pipeline(temp_pdf_path, classifier)
+        sha256 = compute_sha256(pdf_bytes)
+        results = _run_pipeline(temp_pdf_path, classifier, file_name=real_file_name, sha256=sha256)
         reader_result = _read_pdf_details(temp_pdf_path)
         summary = results["summary"]
-        sha256 = compute_sha256(pdf_bytes)
+        # Ensure summary always has real filename
+        summary["file_name"] = real_file_name
         file_size = len(pdf_bytes)
         recommendation = recommendation_for_verdict(str(summary.get("final_label", "unknown")))
         report_timestamp = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+        virustotal_result = results.get("virustotal", {})
         forensic_report = build_forensic_report(
             summary=summary,
             reader_result=reader_result,
             sha256=sha256,
             file_size=file_size,
             recommendation=recommendation,
+            virustotal_result=virustotal_result,
         )
         pdf_report_bytes = build_pdf_report_bytes(
             report_data=forensic_report,
@@ -605,6 +610,7 @@ def _analyze_uploaded_pdf(uploaded_file: Any, classifier: MalwareClassifier) -> 
             "forensic_report": forensic_report,
             "report_timestamp": report_timestamp,
             "pdf_report_bytes": pdf_report_bytes,
+            "virustotal": virustotal_result,
         }
     finally:
         if temp_pdf_path is not None and temp_pdf_path.exists():
