@@ -1451,6 +1451,47 @@ def _render_forensic_details_section(streamlit_module: Any, analysis_result: dic
     streamlit_module.code(str(analysis_result.get("sha256", "")), language="text")
 
 
+
+
+def _render_virustotal_section(streamlit_module: Any, analysis_result: dict[str, Any]) -> None:
+    """Render VirusTotal threat intelligence results."""
+    vt = analysis_result.get("virustotal", {})
+    if not vt:
+        return
+
+    streamlit_module.subheader("VirusTotal Threat Intelligence")
+
+    if vt.get("error") and not vt.get("found"):
+        streamlit_module.info(f"VirusTotal: {vt.get('error', 'No data available.')}")
+        return
+
+    if not vt.get("found"):
+        streamlit_module.info("This file has not been previously submitted to VirusTotal.")
+        return
+
+    vt_verdict = str(vt.get("vt_verdict", "unknown")).lower()
+    malicious = int(vt.get("malicious", 0))
+    suspicious = int(vt.get("suspicious", 0))
+    harmless = int(vt.get("harmless", 0))
+    total = int(vt.get("total_engines", 0))
+    permalink = str(vt.get("vt_permalink", ""))
+
+    col1, col2, col3, col4 = streamlit_module.columns(4)
+    col1.metric("Malicious Engines", malicious)
+    col2.metric("Suspicious Engines", suspicious)
+    col3.metric("Harmless Engines", harmless)
+    col4.metric("Total Engines", total)
+
+    if vt_verdict == "malicious":
+        streamlit_module.error(f"VirusTotal Verdict: MALICIOUS — {malicious} of {total} engines flagged this file.")
+    elif vt_verdict == "suspicious":
+        streamlit_module.warning(f"VirusTotal Verdict: SUSPICIOUS — {suspicious} engines raised concerns.")
+    else:
+        streamlit_module.success(f"VirusTotal Verdict: CLEAN — No engines flagged this file as malicious.")
+
+    if permalink:
+        streamlit_module.markdown(f"[View full VirusTotal report →]({permalink})")
+
 def _render_recommendation_section(
     streamlit_module: Any,
     *,
@@ -1524,7 +1565,7 @@ def _render_analyst_review_section(
 
     save_clicked = streamlit_module.button(
         "Save Analyst Review",
-        width="stretch",
+        use_container_width=True,
         key=_widget_key(key_prefix, "save_review"),
     )
     if save_clicked:
@@ -1672,6 +1713,7 @@ def _render_analysis_panel(
         _render_ml_assessment_section(streamlit_module, analysis_result)
         _render_final_verdict_section(streamlit_module, summary)
         _render_forensic_details_section(streamlit_module, analysis_result)
+        _render_virustotal_section(streamlit_module, analysis_result)
         _render_recommendation_section(
             streamlit_module,
             final_label=final_label,
@@ -1818,7 +1860,7 @@ def _render_analytics_dashboard(
             streamlit_module.bar_chart(confidence_chart_rows, x="file_name", y="confidence")
 
         streamlit_module.subheader("Analyzed Files Table")
-        streamlit_module.dataframe(dashboard_rows, width="stretch")
+        streamlit_module.dataframe(dashboard_rows, use_container_width=True)
         streamlit_module.download_button(
             label="Download Dashboard CSV",
             data=build_csv_export_bytes(dashboard_rows),
@@ -1849,7 +1891,7 @@ def _render_batch_summary(
         metric_cols[3].metric("Malicious", str(counts["malicious"]))
 
         streamlit_module.subheader("Batch Results Summary")
-        streamlit_module.dataframe(rows, width="stretch")
+        streamlit_module.dataframe(rows, use_container_width=True)
         streamlit_module.download_button(
             label="Download Batch Summary CSV",
             data=build_csv_export_bytes(rows),
@@ -1939,7 +1981,7 @@ def _render_scan_history_section(
         streamlit_module.caption(
             "Review workflow columns show the latest saved analyst note, status, priority, and disposition."
         )
-        streamlit_module.dataframe(display_rows, width="stretch")
+        streamlit_module.dataframe(display_rows, use_container_width=True)
         streamlit_module.download_button(
             label="Download Scan History CSV",
             data=build_csv_export_bytes(display_rows, fieldnames=_HISTORY_EXPORT_FIELDNAMES),
@@ -2001,7 +2043,7 @@ def _render_high_risk_workflow_section(
         streamlit_module.caption(
             "Analyst review fields help track triage ownership and final handling decisions for risky files."
         )
-        streamlit_module.dataframe(high_risk_rows, width="stretch")
+        streamlit_module.dataframe(high_risk_rows, use_container_width=True)
         if malicious_rows:
             streamlit_module.download_button(
                 label="Download Malicious CSV",
@@ -2128,7 +2170,7 @@ def main() -> None:
         analyze_clicked = streamlit_module.button(
             "Analyze PDFs",
             type="primary",
-            width="stretch",
+            use_container_width=True,
         )
 
     uploads: list[tuple[str, Any]] = []
