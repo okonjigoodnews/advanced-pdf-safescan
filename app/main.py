@@ -39,6 +39,7 @@ def run_pdf_analysis_details(
     classifier: MalwareClassifier,
     *,
     sha256: str = "",
+    file_name: str = "",
 ) -> AnalysisResult:
     parser = PDFParser()
     extractor = PDFFeatureExtractor()
@@ -51,6 +52,10 @@ def run_pdf_analysis_details(
     except PDFParserError as exc:
         parser_error = exc
         parser_output = parser.read_raw_indicators(pdf_path)
+
+    # Override temp filename with real filename if provided
+    if file_name and isinstance(parser_output, dict):
+        parser_output = {**parser_output, "file_name": file_name}
 
     features = extractor.extract(parser_output)
     rule_result = rule_engine.evaluate(features)
