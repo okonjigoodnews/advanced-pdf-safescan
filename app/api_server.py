@@ -538,8 +538,9 @@ def _scan_pdf_bytes(
             temp_file.write(pdf_bytes)
             temp_pdf_path = Path(temp_file.name)
 
-        result = run_pdf_analysis_details(temp_pdf_path, classifier)
+        result = run_pdf_analysis_details(temp_pdf_path, classifier, sha256=sha256)
         summary = result["summary"]
+        virustotal_result = result.get("virustotal", {})
         analysis_result = {
             "summary": {
                 **summary,
@@ -549,17 +550,20 @@ def _scan_pdf_bytes(
             "client_id": client_id,
             "recommendation": recommendation_for_verdict(str(summary.get("final_label", "unknown"))),
             "report_timestamp": _utc_timestamp(),
+            "virustotal": virustotal_result,
         }
         append_scan_history_records(
             [("extension_api", analysis_result)],
             history_path=history_path,
         )
-        return build_scan_response_from_analysis(
+        scan_response = build_scan_response_from_analysis(
             analysis_result,
             source_url=source_url,
             cached=False,
             review_record=review_records_by_sha256.get(sha256),
         )
+        scan_response["virustotal"] = virustotal_result
+        return scan_response
     finally:
         if temp_pdf_path is not None and temp_pdf_path.exists():
             temp_pdf_path.unlink(missing_ok=True)
