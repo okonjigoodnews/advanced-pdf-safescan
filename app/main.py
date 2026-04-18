@@ -15,6 +15,7 @@ from src.features.extractor import PDFFeatureExtractor
 from src.fusion.decision import HybridDecisionLayer
 from src.ml.classifier import MLClassifierError, MalwareClassifier, load_saved_model, train_from_csv
 from src.parser.document_parser import PDFMalformedError, PDFParser, PDFParserError
+from src.reporting.forensics import lookup_virustotal
 from src.reporting.summary import build_analysis_summary, summary_to_console_text
 from src.rules.engine import RuleEngine
 
@@ -33,7 +34,12 @@ def run_pdf_analysis(pdf_path: Path, classifier: MalwareClassifier) -> AnalysisS
     return run_pdf_analysis_details(pdf_path, classifier)["summary"]
 
 
-def run_pdf_analysis_details(pdf_path: Path, classifier: MalwareClassifier) -> AnalysisResult:
+def run_pdf_analysis_details(
+    pdf_path: Path,
+    classifier: MalwareClassifier,
+    *,
+    sha256: str = "",
+) -> AnalysisResult:
     parser = PDFParser()
     extractor = PDFFeatureExtractor()
     rule_engine = RuleEngine()
@@ -64,6 +70,23 @@ def run_pdf_analysis_details(pdf_path: Path, classifier: MalwareClassifier) -> A
         final_decision=final_decision,
     )
 
+    # VirusTotal lookup — runs if sha256 is provided (API scans pass it in)
+    virustotal_result: dict[str, Any] = {}
+    if sha256:
+        virustotal_result = lookup_virustotal(sha256)
+        # If VirusTotal says malicious but our scanner says benign, escalate
+        vt_verdict = virustotal_result.get("vt_verdict", "unknown")
+        if vt_verdict == "malicious" and summary.get("final_label") == "benign":
+            summary["final_label"] = "suspicious"
+            summary["explanations"] = list(summary.get("explanations", [])) + [
+                f"[high] virustotal-escalation: VirusTotal flagged this file as malicious "
+                f"({virustotal_result.get('malicious', 0)} engines). "
+                f"Verdict escalated from benign to suspicious."
+            ]
+            summary["triggered_rules"] = list(summary.get("triggered_rules", [])) + [
+                "virustotal-malicious"
+            ]
+
     return {
         "parser_output": parser_output,
         "features": features,
@@ -75,6 +98,7 @@ def run_pdf_analysis_details(pdf_path: Path, classifier: MalwareClassifier) -> A
         },
         "final_decision": final_decision,
         "summary": summary,
+        "virustotal": virustotal_result,
     }
 
 
@@ -228,6 +252,7 @@ def _handle_train(csv_path: Path, model_dir: Path) -> int:
         print(f"- {model_name}: {metrics['f1_score']:.3f}")
 
     return 0
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
