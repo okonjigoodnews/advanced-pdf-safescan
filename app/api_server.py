@@ -538,7 +538,7 @@ def _scan_pdf_bytes(
             temp_file.write(pdf_bytes)
             temp_pdf_path = Path(temp_file.name)
 
-        result = run_pdf_analysis_details(temp_pdf_path, classifier, sha256=sha256)
+        result = run_pdf_analysis_details(temp_pdf_path, classifier, sha256=sha256, file_name=file_name)
         summary = result["summary"]
         virustotal_result = result.get("virustotal", {})
         analysis_result = {
