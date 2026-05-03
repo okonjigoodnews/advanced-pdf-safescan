@@ -130,12 +130,6 @@ if (hasChromeApis && chrome.runtime.onMessage) {
         return;
       }
 
-      if (message?.action === "openOptionsPage") {
-        await chrome.runtime.openOptionsPage();
-        sendResponse({ ok: true });
-        return;
-      }
-
       sendResponse({ ok: false, error: "Unknown extension action." });
     })().catch((error) => {
       sendResponse({ ok: false, error: error.message || String(error) });
