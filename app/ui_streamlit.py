@@ -165,6 +165,55 @@ def _inject_page_styles(streamlit_module: Any) -> None:
             background: rgba(2, 8, 23, 0.3);
             backdrop-filter: blur(12px);
         }
+        /* Hide Streamlit default white toolbar and decoration */
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        [data-testid="stDecoration"] {
+            display: none !important;
+        }
+        [data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+        #MainMenu {
+            display: none !important;
+        }
+        footer {
+            display: none !important;
+        }
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            height: 0 !important;
+        }
+        /* Remove top padding so dashboard content starts at top */
+        .block-container {
+            padding-top: 1rem !important;
+        }
+        /* Make sidebar match dark theme */
+        [data-testid="stSidebar"] {
+            background: rgba(2, 8, 23, 0.85) !important;
+        }
+        /* Force file uploader to dark theme */
+        [data-testid="stFileUploader"] section {
+            background: rgba(8, 18, 34, 0.62) !important;
+            border: 1px solid rgba(148, 163, 184, 0.18) !important;
+            border-radius: 12px !important;
+        }
+        [data-testid="stFileUploader"] section > div {
+            color: var(--text-main) !important;
+        }
+        [data-testid="stFileUploader"] button {
+            background: linear-gradient(135deg, #2563eb, #22d3ee) !important;
+            color: white !important;
+            border: none !important;
+        }
+        /* Mobile responsive fixes */
+        @media (max-width: 768px) {
+            .block-container {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+        }
         .block-container {
             max-width: 1240px;
             padding-top: 1.1rem;
@@ -558,9 +607,9 @@ def _save_uploaded_pdf(uploaded_file: Any) -> Path:
         return Path(temp_file.name)
 
 
-def _run_pipeline(pdf_path: Path, classifier: MalwareClassifier, *, file_name: str = "", sha256: str = "") -> dict[str, Any]:
+def _run_pipeline(pdf_path: Path, classifier: MalwareClassifier) -> dict[str, Any]:
     """Run the full backend detection pipeline and return all key outputs."""
-    return run_pdf_analysis_details(pdf_path, classifier, file_name=file_name, sha256=sha256)
+    return run_pdf_analysis_details(pdf_path, classifier)
 
 
 def _read_pdf_details(pdf_path: Path) -> dict[str, Any]:
@@ -574,25 +623,20 @@ def _analyze_uploaded_pdf(uploaded_file: Any, classifier: MalwareClassifier) -> 
     pdf_bytes = uploaded_file.getvalue()
     temp_pdf_path: Path | None = None
     try:
-        real_file_name = getattr(uploaded_file, "name", "uploaded.pdf")
         temp_pdf_path = _save_uploaded_pdf(uploaded_file)
-        sha256 = compute_sha256(pdf_bytes)
-        results = _run_pipeline(temp_pdf_path, classifier, file_name=real_file_name, sha256=sha256)
+        results = _run_pipeline(temp_pdf_path, classifier)
         reader_result = _read_pdf_details(temp_pdf_path)
         summary = results["summary"]
-        # Ensure summary always has real filename
-        summary["file_name"] = real_file_name
+        sha256 = compute_sha256(pdf_bytes)
         file_size = len(pdf_bytes)
         recommendation = recommendation_for_verdict(str(summary.get("final_label", "unknown")))
         report_timestamp = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-        virustotal_result = results.get("virustotal", {})
         forensic_report = build_forensic_report(
             summary=summary,
             reader_result=reader_result,
             sha256=sha256,
             file_size=file_size,
             recommendation=recommendation,
-            virustotal_result=virustotal_result,
         )
         pdf_report_bytes = build_pdf_report_bytes(
             report_data=forensic_report,
@@ -610,7 +654,6 @@ def _analyze_uploaded_pdf(uploaded_file: Any, classifier: MalwareClassifier) -> 
             "forensic_report": forensic_report,
             "report_timestamp": report_timestamp,
             "pdf_report_bytes": pdf_report_bytes,
-            "virustotal": virustotal_result,
         }
     finally:
         if temp_pdf_path is not None and temp_pdf_path.exists():
@@ -1457,47 +1500,6 @@ def _render_forensic_details_section(streamlit_module: Any, analysis_result: dic
     streamlit_module.code(str(analysis_result.get("sha256", "")), language="text")
 
 
-
-
-def _render_virustotal_section(streamlit_module: Any, analysis_result: dict[str, Any]) -> None:
-    """Render VirusTotal threat intelligence results."""
-    vt = analysis_result.get("virustotal", {})
-    if not vt:
-        return
-
-    streamlit_module.subheader("VirusTotal Threat Intelligence")
-
-    if vt.get("error") and not vt.get("found"):
-        streamlit_module.info(f"VirusTotal: {vt.get('error', 'No data available.')}")
-        return
-
-    if not vt.get("found"):
-        streamlit_module.info("This file has not been previously submitted to VirusTotal.")
-        return
-
-    vt_verdict = str(vt.get("vt_verdict", "unknown")).lower()
-    malicious = int(vt.get("malicious", 0))
-    suspicious = int(vt.get("suspicious", 0))
-    harmless = int(vt.get("harmless", 0))
-    total = int(vt.get("total_engines", 0))
-    permalink = str(vt.get("vt_permalink", ""))
-
-    col1, col2, col3, col4 = streamlit_module.columns(4)
-    col1.metric("Malicious Engines", malicious)
-    col2.metric("Suspicious Engines", suspicious)
-    col3.metric("Harmless Engines", harmless)
-    col4.metric("Total Engines", total)
-
-    if vt_verdict == "malicious":
-        streamlit_module.error(f"VirusTotal Verdict: MALICIOUS — {malicious} of {total} engines flagged this file.")
-    elif vt_verdict == "suspicious":
-        streamlit_module.warning(f"VirusTotal Verdict: SUSPICIOUS — {suspicious} engines raised concerns.")
-    else:
-        streamlit_module.success(f"VirusTotal Verdict: CLEAN — No engines flagged this file as malicious.")
-
-    if permalink:
-        streamlit_module.markdown(f"[View full VirusTotal report →]({permalink})")
-
 def _render_recommendation_section(
     streamlit_module: Any,
     *,
@@ -1719,7 +1721,6 @@ def _render_analysis_panel(
         _render_ml_assessment_section(streamlit_module, analysis_result)
         _render_final_verdict_section(streamlit_module, summary)
         _render_forensic_details_section(streamlit_module, analysis_result)
-        _render_virustotal_section(streamlit_module, analysis_result)
         _render_recommendation_section(
             streamlit_module,
             final_label=final_label,
