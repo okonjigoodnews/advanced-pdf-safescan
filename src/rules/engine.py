@@ -116,6 +116,50 @@ RULE_DEFINITIONS: tuple[RuleDefinition, ...] = (
         explanation="Several action-related indicators appear together, suggesting more complex document behavior.",
         severity="medium",
     ),
+
+    # --- NEW: PDF Encryption Detection Rules ---
+
+    RuleDefinition(
+        name="encrypted-pdf-unreadable",
+        condition=lambda features: _safe_bool(features, "is_encrypted")
+        and not (
+            _safe_bool(features, "has_javascript")
+            or _safe_bool(features, "has_js")
+            or _safe_bool(features, "has_openaction")
+            or _safe_bool(features, "has_aa")
+            or _safe_bool(features, "has_launch")
+        ),
+        score=18,
+        explanation="The PDF is encrypted and its contents cannot be fully inspected. "
+                    "Encrypted PDFs can conceal malicious payloads from scanners.",
+        severity="medium",
+    ),
+    RuleDefinition(
+        name="encrypted-with-embedded-file",
+        condition=lambda features: _safe_bool(features, "is_encrypted")
+        and _safe_bool(features, "has_embeddedfile"),
+        score=30,
+        explanation="The PDF is encrypted and contains an embedded file. "
+                    "This combination is commonly used to hide malicious attachments.",
+        severity="high",
+    ),
+    RuleDefinition(
+        name="non-standard-encryption",
+        condition=lambda features: _safe_bool(features, "has_non_standard_encryption"),
+        score=25,
+        explanation="The PDF uses a non-standard or unusual encryption method "
+                    "which may be designed to bypass security scanners.",
+        severity="high",
+    ),
+    RuleDefinition(
+        name="encrypted-with-uri-action",
+        condition=lambda features: _safe_bool(features, "is_encrypted")
+        and _safe_bool(features, "has_uri"),
+        score=22,
+        explanation="The PDF is encrypted and contains URI actions. "
+                    "This may be used to redirect users to malicious websites after decryption.",
+        severity="high",
+    ),
 )
 
 

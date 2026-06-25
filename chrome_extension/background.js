@@ -1,6 +1,6 @@
 const PROTECTED_PRODUCTION_CONFIG = Object.freeze({
   backendBaseUrl: "https://advanced-pdf-safescan-api.onrender.com",
-  dashboardUrl: "https://advanced-pdfsafescan-dashboard.onrender.com",
+  dashboardUrl: "https://advanced-pdf-safescan-dashboard.onrender.com",
   apiToken: ""
 });
 
@@ -126,12 +126,6 @@ if (hasChromeApis && chrome.runtime.onMessage) {
         const settings = await getSettings();
         const clientId = await getOrCreateClientId();
         await openUrl(buildDashboardUrl(settings.dashboardUrl, clientId));
-        sendResponse({ ok: true });
-        return;
-      }
-
-      if (message?.action === "openOptionsPage") {
-        await chrome.runtime.openOptionsPage();
         sendResponse({ ok: true });
         return;
       }

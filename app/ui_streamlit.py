@@ -165,6 +165,55 @@ def _inject_page_styles(streamlit_module: Any) -> None:
             background: rgba(2, 8, 23, 0.3);
             backdrop-filter: blur(12px);
         }
+        /* Hide Streamlit default white toolbar and decoration */
+        [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        [data-testid="stDecoration"] {
+            display: none !important;
+        }
+        [data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+        #MainMenu {
+            display: none !important;
+        }
+        footer {
+            display: none !important;
+        }
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            height: 0 !important;
+        }
+        /* Remove top padding so dashboard content starts at top */
+        .block-container {
+            padding-top: 1rem !important;
+        }
+        /* Make sidebar match dark theme */
+        [data-testid="stSidebar"] {
+            background: rgba(2, 8, 23, 0.85) !important;
+        }
+        /* Force file uploader to dark theme */
+        [data-testid="stFileUploader"] section {
+            background: rgba(8, 18, 34, 0.62) !important;
+            border: 1px solid rgba(148, 163, 184, 0.18) !important;
+            border-radius: 12px !important;
+        }
+        [data-testid="stFileUploader"] section > div {
+            color: var(--text-main) !important;
+        }
+        [data-testid="stFileUploader"] button {
+            background: linear-gradient(135deg, #2563eb, #22d3ee) !important;
+            color: white !important;
+            border: none !important;
+        }
+        /* Mobile responsive fixes */
+        @media (max-width: 768px) {
+            .block-container {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+        }
         .block-container {
             max-width: 1240px;
             padding-top: 1.1rem;
@@ -2295,4 +2344,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

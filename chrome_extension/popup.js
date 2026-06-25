@@ -8,16 +8,12 @@ const resultRecommendation = document.getElementById("result-recommendation");
 const recentScanList = document.getElementById("recent-scan-list");
 const scanCurrentTabButton = document.getElementById("scan-current-tab");
 const openDashboardButton = document.getElementById("open-dashboard");
-const openSettingsButton = document.getElementById("open-settings");
 const refreshRecentButton = document.getElementById("refresh-recent");
 
 document.addEventListener("DOMContentLoaded", initializePopup);
 scanCurrentTabButton.addEventListener("click", handleScanCurrentTab);
 openDashboardButton.addEventListener("click", () => {
   chrome.runtime.sendMessage({ action: "openDashboard" });
-});
-openSettingsButton.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ action: "openOptionsPage" });
 });
 refreshRecentButton.addEventListener("click", initializePopup);
 
@@ -129,43 +125,25 @@ function setBusyState(isBusy) {
 }
 
 function verdictClass(verdictState) {
-  if (verdictState === "safe") {
-    return "verdict-safe";
-  }
-  if (verdictState === "suspicious") {
-    return "verdict-suspicious";
-  }
-  if (verdictState === "malicious") {
-    return "verdict-malicious";
-  }
+  if (verdictState === "safe") return "verdict-safe";
+  if (verdictState === "suspicious") return "verdict-suspicious";
+  if (verdictState === "malicious") return "verdict-malicious";
   return "verdict-failed";
 }
 
 function mapVerdictState(label) {
   const normalizedLabel = String(label || "").toLowerCase();
-  if (normalizedLabel === "benign" || normalizedLabel === "safe") {
-    return "safe";
-  }
-  if (normalizedLabel === "suspicious") {
-    return "suspicious";
-  }
-  if (normalizedLabel === "malicious") {
-    return "malicious";
-  }
+  if (normalizedLabel === "benign" || normalizedLabel === "safe") return "safe";
+  if (normalizedLabel === "suspicious") return "suspicious";
+  if (normalizedLabel === "malicious") return "malicious";
   return "failed";
 }
 
 function formatVerdictLabel(label) {
   const normalizedLabel = String(label || "").toLowerCase();
-  if (normalizedLabel === "benign") {
-    return "Benign";
-  }
-  if (normalizedLabel === "suspicious") {
-    return "Suspicious";
-  }
-  if (normalizedLabel === "malicious") {
-    return "Malicious";
-  }
+  if (normalizedLabel === "benign") return "Benign";
+  if (normalizedLabel === "suspicious") return "Suspicious";
+  if (normalizedLabel === "malicious") return "Malicious";
   return "Failed";
 }
 

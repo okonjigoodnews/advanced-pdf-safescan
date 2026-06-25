@@ -132,6 +132,16 @@ def create_app(
         response.headers["Access-Control-Max-Age"] = "3600"
         return response
 
+    # BUG 1 FIXED: index() is now correctly dedented outside add_cors_headers
+    @app.route("/", methods=["GET"])
+    def index():
+        return jsonify({
+            "status": "ok",
+            "message": "Advanced PDFSafeScan backend is running",
+            "dashboard_url": runtime_config.dashboard_public_url
+        })
+
+    # BUG 2 FIXED: Removed duplicate health() definition, keeping only this one with docstring
     @app.route("/api/health", methods=["GET"], provide_automatic_options=False)
     def health() -> Any:
         """Return a simple deployment-aware health payload."""
@@ -512,11 +522,13 @@ def _scan_pdf_bytes(
             [("extension_api_cached", cached_analysis_result)],
             history_path=history_path,
         )
+        # BUG 3 FIXED: Pass client_id so the response is scoped to the correct client
         return build_scan_response_from_history_record(
             cached_history_record,
             source_url=source_url,
             cached=True,
             review_record=cached_review_record,
+            client_id=client_id,
         )
 
     classifier = _get_classifier(model_dir=model_dir)
@@ -526,8 +538,9 @@ def _scan_pdf_bytes(
             temp_file.write(pdf_bytes)
             temp_pdf_path = Path(temp_file.name)
 
-        result = run_pdf_analysis_details(temp_pdf_path, classifier)
+        result = run_pdf_analysis_details(temp_pdf_path, classifier, sha256=sha256, file_name=file_name)
         summary = result["summary"]
+        virustotal_result = result.get("virustotal", {})
         analysis_result = {
             "summary": {
                 **summary,
@@ -537,17 +550,20 @@ def _scan_pdf_bytes(
             "client_id": client_id,
             "recommendation": recommendation_for_verdict(str(summary.get("final_label", "unknown"))),
             "report_timestamp": _utc_timestamp(),
+            "virustotal": virustotal_result,
         }
         append_scan_history_records(
             [("extension_api", analysis_result)],
             history_path=history_path,
         )
-        return build_scan_response_from_analysis(
+        scan_response = build_scan_response_from_analysis(
             analysis_result,
             source_url=source_url,
             cached=False,
             review_record=review_records_by_sha256.get(sha256),
         )
+        scan_response["virustotal"] = virustotal_result
+        return scan_response
     finally:
         if temp_pdf_path is not None and temp_pdf_path.exists():
             temp_pdf_path.unlink(missing_ok=True)
@@ -675,8 +691,3 @@ def _safe_int(value: Any, default: int) -> int:
 def _utc_timestamp() -> str:
     """Return an ISO 8601 UTC timestamp string."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-
