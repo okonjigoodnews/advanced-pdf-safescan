@@ -1,0 +1,21 @@
+MODEL FEATURE IMPORTANCE (learned weights)
+============================================================
+Positive weight pushes toward MALICIOUS.
+Negative weight pushes toward BENIGN.
+These weights were LEARNED from the training data.
+
+  has_acroform                     +4.0283   -> malicious
+  metadata_field_count             -3.0560   -> benign
+  has_js                           +1.9488   -> malicious
+  acroform_count                   -1.6068   -> benign
+  page_count                       -1.2584   -> benign
+  javascript_count                 +1.0274   -> malicious
+  has_openaction                   +0.8524   -> malicious
+  aa_count                         -0.8403   -> benign
+  high_risk_keyword_total          -0.7907   -> benign
+  js_count                         -0.6987   -> benign
+  has_javascript                   +0.6837   -> malicious
+  has_uri                          +0.4698   -> malicious
+  has_embeddedfile                 -0.4498   -> benign
+  has_aa                           +0.4311   -> malicious
+  file_size                        -0.4175   -> benign

@@ -1,0 +1,39 @@
+IMPROVED SYSTEM EVALUATION: treating parse failure as a signal
+======================================================================
+
+CORPUS
+  Total files        : 31006
+  Malicious          : 21899
+  Benign             : 9107
+  Unparseable        : 14676 (14671 malicious, 5 benign)
+
+HELD-OUT TEST SET: 6202 files (4380 malicious, 1822 benign)
+  of which unparseable: 2941
+
+RESULTS ON THE SAME TEST SET
+----------------------------------------------------------------------
+System                                     Acc    Prec     Rec      F1    FPR
+BEFORE: parse failure = dropped         50.19%  98.50%  29.93%  45.91%  1.10%
+AFTER: parse failure = suspicious       97.58%  99.51%  97.05%  98.27%  1.15%
+
+ERRORS (FN = malicious that got through, FP = false alarms)
+  BEFORE: parse failure = dropped        FN=3069   FP=20
+  AFTER: parse failure = suspicious      FN=129    FP=21
+
+MALICIOUS COVERAGE (files the system actually gives a verdict on)
+----------------------------------------------------------------------
+  BEFORE : 1440/4380 = 32.9%
+  AFTER  : 4380/4380 = 100.0%
+
+IMPROVEMENT
+----------------------------------------------------------------------
+  Recall  : 29.93%  ->  97.05%   (+67.12 points)
+  F1      : 45.91%  ->  98.27%   (+52.35 points)
+  Accuracy: 50.19%  ->  97.58%   (+47.39 points)
+  Malicious files that got through: 3069  ->  129
+  Cost: false alarms rose from 20 to 21 (the 5 unparseable benign files, mostly encrypted).
+
+PROVENANCE FIXED
+----------------------------------------------------------------------
+  full_dataset.csv now records a SHA-256 for every row, so each
+  feature row can be traced back to the exact source file.

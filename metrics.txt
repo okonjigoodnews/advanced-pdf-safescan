@@ -1,0 +1,29 @@
+PDFSafeScan Evaluation Metrics (held-out 20 percent)
+==================================================
+Total dataset size : 12059
+Training files     : 9647
+Test files (unseen): 2412
+
+Accuracy           : 0.9805  (98.05%)
+Precision          : 0.9642
+Recall             : 0.9560
+F1-Score           : 0.9601
+False Positive Rate: 0.0115
+False Negative Rate: 0.0440
+Avg prediction time: 0.0001 ms per file
+
+Confusion Matrix:
+  True Positives  (malicious caught) : 565
+  True Negatives  (benign passed)    : 1800
+  False Positives (benign flagged)   : 21
+  False Negatives (malicious missed) : 26
+
+Classification report:
+              precision    recall  f1-score   support
+
+      benign       0.99      0.99      0.99      1821
+   malicious       0.96      0.96      0.96       591
+
+    accuracy                           0.98      2412
+   macro avg       0.97      0.97      0.97      2412
+weighted avg       0.98      0.98      0.98      2412

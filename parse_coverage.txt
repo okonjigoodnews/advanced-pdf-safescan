@@ -1,0 +1,34 @@
+PARSE COVERAGE ANALYSIS  (full dataset)
+==================================================================
+
+BENIGN
+  Total files      : 9107
+  Parsed OK        : 9102  (99.95%)
+  Failed to parse  : 5  (0.05%)
+  Error types      : {'PDFEncryptedError': 4, 'PDFMalformedError': 1}
+
+MALICIOUS
+  Total files      : 21899
+  Parsed OK        : 7228  (33.01%)
+  Failed to parse  : 14671  (66.99%)
+  Error types      : {'PDFMalformedError': 14651, 'PDFEncryptedError': 3, 'no_header': 17}
+
+THE KEY FINDING
+------------------------------------------------------------------
+  Benign parse-failure rate    : 0.05%
+  Malicious parse-failure rate : 66.99%
+  Of ALL files that failed to parse, 99.97% were malicious.
+
+  => Parse failure is a STRONG malicious signal in this dataset.
+     A file that cannot be parsed is overwhelmingly likely malicious.
+     The current pipeline discards these files, silently missing
+     roughly 67% of the malicious samples.
+
+COVERAGE IMPLICATION
+------------------------------------------------------------------
+  Current system classifies only files that parse:
+    malicious coverage = 7228/21899 = 33.0%
+  Treating parse failure as 'suspicious' would raise malicious
+    coverage to effectively 100.0%.
+
+(Benign analysed in 174.6s, malicious in 298.7s.)

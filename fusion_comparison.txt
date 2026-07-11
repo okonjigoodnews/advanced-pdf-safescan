@@ -1,0 +1,23 @@
+FUSION STRATEGY COMPARISON
+======================================================================
+Test set: 2412 held-out files (591 malicious, 1821 benign)
+All thresholds tuned on TRAINING data only.
+
+Strategy                                   Acc    Prec     Rec      F1    FPR
+----------------------------------------------------------------------
+1. ML only (baseline)                   98.05%  96.42%  95.60%  96.01%  1.15%
+2. Average (original)                   88.81%  98.78%  54.99%  70.65%  0.22%
+3. OR-escalate (rules>=0.70)            98.05%  96.42%  95.60%  96.01%  1.15%
+4. Weighted avg (model 0.70)            98.09%  97.23%  94.92%  96.06%  0.88%
+5. Rules escalate only (p>=0.15, r>=0.20)  98.05%  96.42%  95.60%  96.01%  1.15%
+
+Errors (FN = malicious missed, FP = false alarms):
+  1. ML only (baseline)                  FN=26    FP=21
+  2. Average (original)                  FN=266   FP=4
+  3. OR-escalate (rules>=0.70)           FN=26    FP=21
+  4. Weighted avg (model 0.70)           FN=30    FP=16
+  5. Rules escalate only (p>=0.15, r>=0.20) FN=26    FP=21
+
+BASELINE (ML only) F1 : 96.01%
+BEST STRATEGY         : 4. Weighted avg (model 0.70) (F1 96.06%)
+IMPROVEMENT OVER ML   : +0.05 F1 points

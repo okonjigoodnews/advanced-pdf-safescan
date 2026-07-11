@@ -1,0 +1,19 @@
+ABLATION STUDY RESULTS
+==================================================================
+Test set: 2412 held-out files (591 malicious, 1821 benign)
+Rule engine threshold (learned from training data): 10
+
+Approach                     Acc     Prec   Recall       F1     FPR
+------------------------------------------------------------------
+Rule engine only          86.44%   82.84%   56.35%   67.07%   3.79%
+Machine learning only     98.05%   96.42%   95.60%   96.01%   1.15%
+Hybrid (rules + ML)       88.81%   98.78%   54.99%   70.65%   0.22%
+
+Confusion matrix detail (TP = malicious caught, FN = malicious missed):
+  Rule engine only         TP=333   TN=1752   FP=69    FN=258
+  Machine learning only    TP=565   TN=1800   FP=21    FN=26
+  Hybrid (rules + ML)      TP=325   TN=1817   FP=4     FN=266
+
+Best F1 score: Machine learning only (96.01%)
+Hybrid vs ML only:    -25.35 F1 points
+Hybrid vs rules only: +3.58 F1 points
