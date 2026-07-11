@@ -138,9 +138,6 @@ class CLITestCase(unittest.TestCase):
             "model_path": "models/best_model.joblib",
             "feature_columns_path": "models/feature_columns.json",
             "metrics_summary_path": "models/metrics_summary.json",
-            "confusion_matrix_path": "models/confusion_matrix.png",
-            "model_comparison_path": "models/model_comparison.png",
-            "reports_dir": "models/reports",
             "dataset_row_count": 12059,
             "class_distribution": {"benign": 9102, "malicious": 2957},
             "best_model_metrics": {
@@ -275,7 +272,7 @@ class CLITestCase(unittest.TestCase):
         self.assertEqual(summary["rule_severity"], "critical")
         self.assertIn("malformed-pdf-structure", summary["triggered_rules"])
         self.assertTrue(
-            any("could not be parsed" in explanation for explanation in summary["explanations"])
+            any("could not be fully parsed" in explanation for explanation in summary["explanations"])
         )
         fusion_class.return_value.combine.assert_not_called()
 

@@ -188,7 +188,7 @@ class CLITestCase(unittest.TestCase):
             exit_code = main(["train", "--csv", "missing.csv"])
 
         self.assertEqual(exit_code, 1)
-        self.assertIn("Dataset CSV file not found", stderr.getvalue())
+        self.assertIn("Dataset file not found", stderr.getvalue())
 
     def test_main_returns_error_for_missing_model(self) -> None:
         """Report model-loading errors cleanly to stderr."""
@@ -294,11 +294,11 @@ class CLITestCase(unittest.TestCase):
 
         summary = result["summary"]
         self.assertEqual(summary["final_label"], "suspicious")
-        self.assertGreaterEqual(summary["final_confidence"], 0.55)
-        self.assertEqual(summary["rule_severity"], "medium")
-        self.assertIn("unreadable-pdf", summary["triggered_rules"])
+        self.assertGreaterEqual(summary["final_confidence"], 0.85)
+        self.assertEqual(summary["rule_severity"], "critical")
+        self.assertIn("malformed-pdf-structure", summary["triggered_rules"])
         self.assertTrue(
-            any("could not be fully parsed" in explanation for explanation in summary["explanations"])
+            any("could not be parsed" in explanation for explanation in summary["explanations"])
         )
         fusion_class.return_value.combine.assert_not_called()
 

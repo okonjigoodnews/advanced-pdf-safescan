@@ -14,12 +14,7 @@ from app.cli import build_parser
 from src.features.extractor import PDFFeatureExtractor
 from src.fusion.decision import HybridDecisionLayer
 from src.ml.classifier import MLClassifierError, MalwareClassifier, load_saved_model, train_from_csv
-from src.parser.document_parser import (
-    PDFEncryptedError,
-    PDFMalformedError,
-    PDFParser,
-    PDFParserError,
-)
+from src.parser.document_parser import PDFMalformedError, PDFParser, PDFParserError
 from src.reporting.forensics import lookup_virustotal
 from src.reporting.summary import build_analysis_summary, summary_to_console_text
 from src.rules.engine import RuleEngine
@@ -70,9 +65,7 @@ def run_pdf_analysis_details(
         final_decision = fusion_layer.combine(rule_result, ml_result)
     else:
         rule_result = _build_fallback_rule_result(rule_result, parser_error)
-        final_decision = _build_fallback_final_decision(
-            rule_result, ml_result, parser_error
-        )
+        final_decision = _build_fallback_final_decision(rule_result, ml_result)
 
     summary = build_analysis_summary(
         parser_output=parser_output,
@@ -118,51 +111,25 @@ def _build_fallback_rule_result(
     rule_result: dict[str, Any],
     parser_error: PDFParserError,
 ) -> dict[str, Any]:
-    """Escalate the rule result when a PDF could not be parsed.
-
-    Empirical basis: across a corpus of 31,006 PDFs, only 0.05 percent of
-    benign files failed to parse, compared with 66.99 percent of malicious
-    files. Of every file that failed to parse, 99.97 percent were malicious.
-    Malformed structure is therefore treated as a critical indicator.
-
-    Encryption is handled separately, because it is a legitimate feature of
-    the PDF format and most benign parse failures in the corpus were
-    encrypted rather than malformed.
-    """
     fallback_result = dict(rule_result)
     triggered_rules = list(fallback_result.get("triggered_rules", []))
     explanations = list(fallback_result.get("explanations", []))
 
-    if isinstance(parser_error, PDFEncryptedError):
-        if "encrypted-pdf" not in triggered_rules:
-            triggered_rules.append("encrypted-pdf")
-        explanations.append(
-            "[medium] encrypted-pdf: The PDF is encrypted and could not be "
-            "fully inspected, so its contents could not be verified."
-        )
-        raw_score = max(int(fallback_result.get("risk_score_raw", 0)), 15)
-        normalized_score = max(
-            int(fallback_result.get("risk_score_normalized", 0)), 25
-        )
-        severity = "medium"
-    else:
-        if "malformed-pdf-structure" not in triggered_rules:
-            triggered_rules.append("malformed-pdf-structure")
-        explanations.append(
-            "[critical] malformed-pdf-structure: The PDF could not be parsed "
-            f"({parser_error}). Deliberately corrupted structure is a common "
-            "evasion technique and is strongly associated with malicious "
-            "documents."
-        )
-        raw_score = max(int(fallback_result.get("risk_score_raw", 0)), 80)
-        normalized_score = max(
-            int(fallback_result.get("risk_score_normalized", 0)), 85
-        )
-        severity = "critical"
+    if "unreadable-pdf" not in triggered_rules:
+        triggered_rules.append("unreadable-pdf")
+    explanations.append(
+        "[medium] unreadable-pdf: "
+        f"The PDF could not be fully parsed ({parser_error}) and may itself be suspicious."
+    )
+
+    raw_score = max(int(fallback_result.get("risk_score_raw", 0)), 15)
+    normalized_score = max(int(fallback_result.get("risk_score_normalized", 0)), 25)
 
     fallback_result["risk_score_raw"] = raw_score
     fallback_result["risk_score_normalized"] = normalized_score
-    fallback_result["severity"] = severity
+    fallback_result["severity"] = _fallback_rule_severity(
+        str(fallback_result.get("severity", "low"))
+    )
     fallback_result["triggered_rules"] = triggered_rules
     fallback_result["explanations"] = explanations
     return fallback_result
@@ -171,22 +138,9 @@ def _build_fallback_rule_result(
 def _build_fallback_final_decision(
     rule_result: dict[str, Any],
     ml_result: Any,
-    parser_error: PDFParserError | None = None,
 ) -> dict[str, Any]:
-    """Build the verdict for a PDF that could not be parsed.
-
-    A malformed file is reported with high confidence, because parse failure
-    was 99.97 percent precise for malice in the evaluation corpus. The label
-    remains suspicious rather than malicious, because 99.97 percent is not
-    certainty and a small number of legitimate PDFs are genuinely malformed.
-    """
     ml_confidence = _safe_float(getattr(ml_result, "confidence", 0.0))
-    is_encrypted = isinstance(parser_error, PDFEncryptedError)
-
-    if is_encrypted:
-        final_confidence = round(max(0.50, min(0.65, ml_confidence)), 3)
-    else:
-        final_confidence = 0.90
+    final_confidence = round(max(0.55, min(0.75, ml_confidence)), 3)
 
     return {
         "final_label": "suspicious",

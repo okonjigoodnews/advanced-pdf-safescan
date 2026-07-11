@@ -97,7 +97,7 @@ class StreamlitUITestCase(unittest.TestCase):
 
         self.assertIn("Advanced PDFSafeScan", hero_html)
         self.assertIn("Intelligent Malicious PDF Detection", hero_html)
-        self.assertIn("CYBERSECURITY PDF INTELLIGENCE", hero_html)
+        self.assertIn("Cybersecurity Research Dashboard", hero_html)
 
     def test_count_verdicts_returns_expected_batch_totals(self) -> None:
         """Count batch verdicts for overview metrics."""
@@ -752,7 +752,7 @@ class StreamlitUITestCase(unittest.TestCase):
 
         self.assertIn("PDF A", sticky_html)
         self.assertIn("PDF B", sticky_html)
-        self.assertIn("Riskier PDF", sticky_html)
+        self.assertIn("Riskier File", sticky_html)
         self.assertIn("Different", sticky_html)
 
     def test_build_sticky_verdict_bar_html_for_batch_contains_overview_fields(self) -> None:
@@ -795,10 +795,10 @@ class StreamlitUITestCase(unittest.TestCase):
 
         sticky_html = _build_sticky_verdict_bar_html(analyzed_results)
 
-        self.assertIn("Total PDFs", sticky_html)
+        self.assertIn("Total Files", sticky_html)
         self.assertIn("Malicious", sticky_html)
         self.assertIn("Suspicious", sticky_html)
-        self.assertIn("Riskiest PDF", sticky_html)
+        self.assertIn("Riskiest File", sticky_html)
 
     def test_verdict_banner_config_returns_streamlit_method(self) -> None:
         """Map verdict labels onto clear Streamlit-native styling."""

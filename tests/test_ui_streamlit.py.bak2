@@ -798,7 +798,7 @@ class StreamlitUITestCase(unittest.TestCase):
         self.assertIn("Total PDFs", sticky_html)
         self.assertIn("Malicious", sticky_html)
         self.assertIn("Suspicious", sticky_html)
-        self.assertIn("Riskiest PDF", sticky_html)
+        self.assertIn("Riskiest File", sticky_html)
 
     def test_verdict_banner_config_returns_streamlit_method(self) -> None:
         """Map verdict labels onto clear Streamlit-native styling."""

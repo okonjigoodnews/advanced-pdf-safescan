@@ -81,7 +81,7 @@ class CLITestCase(unittest.TestCase):
         self.assertIn("SCAN SUMMARY", stdout.getvalue())
 
     def test_main_scan_folder_prints_short_result_line_per_pdf(self) -> None:
-        """Run the scan-folder command and print one short line per file."""
+        """Run the scan-folder command and print one short line per PDF."""
         summaries = {
             "a.pdf": {
                 "file_name": "a.pdf",
@@ -133,16 +133,21 @@ class CLITestCase(unittest.TestCase):
     def test_main_train_prints_training_summary(self) -> None:
         """Run the train command and print readable training output."""
         training_result = {
+            "dataset_row_count": 2400,
+            "class_distribution": {
+                "benign": 1600,
+                "malicious": 500,
+                "suspicious": 300,
+            },
+            "target_column": "label",
             "recommended_baseline": "random_forest",
             "best_model_name": "random_forest",
             "model_path": "models/best_model.joblib",
             "feature_columns_path": "models/feature_columns.json",
-            "metrics_summary_path": "models/metrics_summary.json",
-            "confusion_matrix_path": "models/confusion_matrix.png",
-            "model_comparison_path": "models/model_comparison.png",
+            "metrics_summary_path": "models/reports/metrics_summary.json",
+            "confusion_matrix_path": "models/reports/best_model_confusion_matrix.png",
+            "model_comparison_path": "models/reports/model_f1_comparison.png",
             "reports_dir": "models/reports",
-            "dataset_row_count": 12059,
-            "class_distribution": {"benign": 9102, "malicious": 2957},
             "best_model_metrics": {
                 "accuracy": 0.91,
                 "precision": 0.90,
@@ -164,8 +169,26 @@ class CLITestCase(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(exit_code, 0)
         self.assertIn("Training completed successfully.", output)
-        self.assertIn("Best model: random_forest", output)
+        self.assertIn("Dataset rows: 2400", output)
+        self.assertIn("Class distribution:", output)
+        self.assertIn("benign: 1600", output)
+        self.assertIn("Best selected model: random_forest", output)
+        self.assertIn("Saved model path: models/best_model.joblib", output)
+        self.assertIn("Saved metrics/report path: models/reports/metrics_summary.json", output)
+        self.assertIn("Confusion matrix chart: models/reports/best_model_confusion_matrix.png", output)
+        self.assertIn("Model comparison chart: models/reports/model_f1_comparison.png", output)
+        self.assertIn("Saved reports directory: models/reports", output)
         self.assertIn("- random_forest: 0.900", output)
+
+    def test_main_train_reports_missing_csv_cleanly(self) -> None:
+        """Return a readable error when the training CSV path does not exist."""
+        stderr = io.StringIO()
+
+        with redirect_stderr(stderr):
+            exit_code = main(["train", "--csv", "missing.csv"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Dataset file not found", stderr.getvalue())
 
     def test_main_returns_error_for_missing_model(self) -> None:
         """Report model-loading errors cleanly to stderr."""
@@ -275,7 +298,7 @@ class CLITestCase(unittest.TestCase):
         self.assertEqual(summary["rule_severity"], "critical")
         self.assertIn("malformed-pdf-structure", summary["triggered_rules"])
         self.assertTrue(
-            any("could not be parsed" in explanation for explanation in summary["explanations"])
+            any("could not be fully parsed" in explanation for explanation in summary["explanations"])
         )
         fusion_class.return_value.combine.assert_not_called()
 
