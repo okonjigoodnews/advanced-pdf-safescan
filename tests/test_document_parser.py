@@ -164,7 +164,7 @@ class CLITestCase(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(exit_code, 0)
         self.assertIn("Training completed successfully.", output)
-        self.assertIn("Best model: random_forest", output)
+        self.assertIn("Best selected model: random_forest", output)
         self.assertIn("- random_forest: 0.900", output)
 
     def test_main_returns_error_for_missing_model(self) -> None:
