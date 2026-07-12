@@ -26,3 +26,21 @@ data/raw/
 data/processed/
 models/*.pkl
 models/*.joblib
+
+# Dissertation analysis artifacts (kept in ~/dissertation_analysis, not deployed)
+full_dataset.csv
+ablation_*.png
+ablation_*.txt
+fusion_*.png
+fusion_*.txt
+parse_coverage.*
+improved_*.png
+improved_*.txt
+feature_importance.*
+confusion_matrix.png
+metrics.txt
+*.backup
+*.bak
+*.bak2
+find_strong_malicious.py
+fix_*.py

@@ -10,6 +10,7 @@ from src.rules.engine import RuleResult
 
 FUSION_THRESHOLDS: dict[str, float] = {
     "malicious_ml_confidence_high": 0.80,
+    "malicious_ml_confidence_very_high": 0.90,
     "malicious_ml_confidence_medium": 0.60,
     "suspicious_ml_confidence_medium": 0.55,
     "benign_ml_confidence_high": 0.75,
@@ -76,10 +77,22 @@ class HybridDecisionLayer:
         ml_confidence: float,
     ) -> str:
         """Apply a simple conservative fusion policy."""
+        # A confident model plus any real rule signal (medium or above)
+        # is trusted as malicious. The rule engine's normalisation caps
+        # even strong malware at "medium" severity, so requiring "high"
+        # here would prevent the system from ever returning "malicious".
         if (
             ml_label == "malicious"
             and ml_confidence >= FUSION_THRESHOLDS["malicious_ml_confidence_high"]
-            and rule_severity in {"high", "critical"}
+            and rule_severity in {"medium", "high", "critical"}
+        ):
+            return "malicious"
+        # A very confident model is trusted on its own, even when the
+        # rules are quiet, because a near-certain prediction should not be
+        # blocked by weak structural rules.
+        if (
+            ml_label == "malicious"
+            and ml_confidence >= FUSION_THRESHOLDS["malicious_ml_confidence_very_high"]
         ):
             return "malicious"
 
