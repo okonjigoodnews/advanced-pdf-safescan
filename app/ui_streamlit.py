@@ -960,19 +960,128 @@ def _load_dashboard_history_records(limit: int = _HISTORY_API_RECENT_LIMIT) -> l
     return load_scan_history()
 
 
+def _merge_history_records(
+    *record_groups: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge history records from several stores, removing duplicates.
+
+    Records are identified by their SHA-256 and timestamp, so the same scan
+    appearing in more than one store is only counted once.
+    """
+    merged_records: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+
+    for record_group in record_groups:
+        for record in record_group:
+            record_key = (
+                str(record.get("sha256", "")).strip(),
+                str(record.get("timestamp", "")).strip(),
+            )
+            if record_key in seen_keys:
+                continue
+            seen_keys.add(record_key)
+            merged_records.append(record)
+
+    return merged_records
+
+
 def _load_dashboard_history_records_for_client(
     *,
     client_id: str,
     limit: int = _HISTORY_API_RECENT_LIMIT,
 ) -> list[dict[str, Any]]:
-    """Load dashboard history for one hosted client id, falling back locally when needed."""
-    hosted_history_records = _fetch_hosted_scan_history(
-        client_id=client_id,
-        limit=limit,
+    """Load scan history for the dashboard.
+
+    A client id is only present when the dashboard was opened from the browser
+    extension. In that case the extension's own scans are held by the hosted
+    API, so they are read from there and remain scoped to that client. When no
+    client id is present the dashboard is being used directly, and its own
+    locally recorded scans are read instead. The two stores are never mixed,
+    so one client's scans are never shown to another.
+    """
+    if client_id:
+        hosted_history_records = _fetch_hosted_scan_history(
+            client_id=client_id,
+            limit=limit,
+        )
+        if hosted_history_records is not None:
+            return hosted_history_records
+        return []
+
+    try:
+        return load_scan_history()
+    except OSError:
+        return []
+
+
+def _latest_history_record(
+    history_records: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Return the most recent scan record, or None when there are none."""
+    if not history_records:
+        return None
+    return max(
+        history_records,
+        key=lambda record: str(record.get("timestamp", "")),
     )
-    if hosted_history_records is not None:
-        return hosted_history_records
-    return load_scan_history()
+
+
+def _build_current_scan_panel_html_from_record(record: dict[str, Any]) -> str:
+    """Build the Current Scan panel from a single stored history record.
+
+    This is used when the dashboard is opened from the browser extension, where
+    the scan was performed by the API rather than in this session.
+    """
+    verdict_colors = {
+        "benign": ("#22C55E", "rgba(34,197,94,0.12)"),
+        "suspicious": ("#F59E0B", "rgba(245,158,11,0.12)"),
+        "malicious": ("#E5484D", "rgba(229,72,77,0.12)"),
+    }
+
+    final_label = str(record.get("final_label", "unknown")).lower()
+    accent_color, background_color = verdict_colors.get(
+        final_label, ("#64748B", "rgba(100,116,139,0.12)")
+    )
+
+    parsed_flag = record.get("parsed")
+    if parsed_flag is False:
+        readable_label = "Unreadable, treated as suspicious"
+    elif parsed_flag is True:
+        readable_label = "Readable"
+    else:
+        readable_label = ""
+
+    file_name = html.escape(str(record.get("file_name", "unknown")))
+    sha256 = html.escape(str(record.get("sha256", ""))[:16])
+    confidence = _safe_float(record.get("final_confidence", 0.0))
+    rule_score = _safe_float(record.get("rule_score", 0.0))
+    recommendation = html.escape(str(record.get("recommendation", "")))
+
+    readable_html = (
+        f"<div style=\"font-size:12px;color:#9AA8C0;margin-top:4px;\">{readable_label}</div>"
+        if readable_label
+        else ""
+    )
+
+    return (
+        "<div style=\"margin:18px 0 8px 0;padding:16px 18px;border-radius:12px;"
+        "background:rgba(30,39,97,0.35);border:1px solid rgba(60,76,144,0.6);\">"
+        "<div style=\"font-size:11px;font-weight:700;letter-spacing:2px;"
+        "color:#CADCFC;text-transform:uppercase;\">Current Scan</div>"
+        "<div style=\"font-size:13px;color:#9AA8C0;margin:4px 0 12px 0;\">"
+        "Scanned from the browser extension</div>"
+        "<div style=\"padding:14px 16px;border-radius:10px;"
+        f"background:{background_color};border:1px solid {accent_color};\">"
+        f"<div style=\"font-weight:700;color:{accent_color};text-transform:uppercase;"
+        f"letter-spacing:1px;font-size:11px;\">{html.escape(final_label)}</div>"
+        f"<div style=\"font-size:15px;font-weight:600;margin:6px 0;color:#E6ECF5;"
+        f"word-break:break-all;\">{file_name}</div>"
+        f"<div style=\"font-size:12px;color:#9AA8C0;\">Confidence {confidence:.2f}"
+        f" &middot; Rule score {rule_score:.2f} &middot; SHA-256 {sha256}...</div>"
+        f"{readable_html}"
+        f"<div style=\"font-size:12px;color:#C7D2E4;margin-top:8px;\">{recommendation}</div>"
+        "</div></div>"
+    )
 
 
 def _streamlit_query_param_client_id(streamlit_module: Any) -> str:
@@ -1045,7 +1154,7 @@ def _build_live_status_strip_html(history_records: list[dict[str, Any]]) -> str:
     """Return the live status strip HTML shown near the top of the UI."""
     summary = _build_live_status_summary(history_records)
     chips = [
-        ("Total Scans", str(summary["total_scans"]), "Persistent scan history"),
+        ("Total Scans", str(summary["total_scans"]), "Scan history for this deployment"),
         ("Malicious Files", str(summary["malicious_count"]), "High-priority detections"),
         ("Suspicious Files", str(summary["suspicious_count"]), "Files needing caution"),
         (
@@ -1377,6 +1486,86 @@ def _render_sticky_verdict_bar(
 def _render_page_header(streamlit_module: Any) -> None:
     """Render the premium hero header."""
     streamlit_module.markdown(_build_hero_html(), unsafe_allow_html=True)
+
+
+def _build_current_scan_panel_html(
+    analyzed_results: list[tuple[str, dict[str, Any]]],
+) -> str:
+    """Build the Current Scan panel, showing only the scan just performed."""
+    if not analyzed_results:
+        return ""
+
+    verdict_colors = {
+        "benign": ("#22C55E", "rgba(34,197,94,0.12)"),
+        "suspicious": ("#F59E0B", "rgba(245,158,11,0.12)"),
+        "malicious": ("#E5484D", "rgba(229,72,77,0.12)"),
+    }
+
+    unreadable_count = 0
+    cards: list[str] = []
+
+    for _key_prefix, analysis_result in analyzed_results:
+        summary = analysis_result.get("summary", {})
+        final_label = str(summary.get("final_label", "unknown")).lower()
+        accent_color, background_color = verdict_colors.get(
+            final_label, ("#64748B", "rgba(100,116,139,0.12)")
+        )
+
+        triggered_rules = summary.get("triggered_rules", [])
+        is_unreadable = isinstance(triggered_rules, (list, tuple, set)) and any(
+            "malformed-pdf-structure" in str(rule).lower() for rule in triggered_rules
+        )
+        if is_unreadable:
+            unreadable_count += 1
+
+        file_name = html.escape(str(summary.get("file_name", "unknown")))
+        confidence = _safe_float(summary.get("final_confidence", 0.0))
+        rule_score = _safe_float(summary.get("rule_score", 0.0))
+        rule_severity = html.escape(str(summary.get("rule_severity", "low")))
+        readable_label = "Unreadable, treated as suspicious" if is_unreadable else "Readable"
+
+        cards.append(
+            "<div style=\"flex:1;min-width:220px;padding:14px 16px;border-radius:10px;"
+            f"background:{background_color};border:1px solid {accent_color};\">"
+            f"<div style=\"font-weight:700;color:{accent_color};text-transform:uppercase;"
+            f"letter-spacing:1px;font-size:11px;\">{html.escape(final_label)}</div>"
+            f"<div style=\"font-size:15px;font-weight:600;margin:6px 0;color:#E6ECF5;"
+            f"word-break:break-all;\">{file_name}</div>"
+            f"<div style=\"font-size:12px;color:#9AA8C0;\">Confidence {confidence:.2f}"
+            f" &middot; Rule score {rule_score:.2f} &middot; Severity {rule_severity}</div>"
+            f"<div style=\"font-size:12px;color:#9AA8C0;margin-top:4px;\">{readable_label}</div>"
+            "</div>"
+        )
+
+    scanned_count = len(analyzed_results)
+    file_word = "file" if scanned_count == 1 else "files"
+    coverage_note = (
+        f" &middot; {unreadable_count} could not be parsed"
+        if unreadable_count
+        else " &middot; all files parsed successfully"
+    )
+
+    return (
+        "<div style=\"margin:18px 0 8px 0;padding:16px 18px;border-radius:12px;"
+        "background:rgba(30,39,97,0.35);border:1px solid rgba(60,76,144,0.6);\">"
+        "<div style=\"font-size:11px;font-weight:700;letter-spacing:2px;"
+        "color:#CADCFC;text-transform:uppercase;\">Current Scan</div>"
+        f"<div style=\"font-size:13px;color:#9AA8C0;margin:4px 0 12px 0;\">"
+        f"{scanned_count} {file_word} scanned in this run{coverage_note}</div>"
+        "<div style=\"display:flex;gap:12px;flex-wrap:wrap;\">"
+        + "".join(cards)
+        + "</div></div>"
+    )
+
+
+def _render_current_scan_panel(
+    streamlit_target: Any,
+    analyzed_results: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """Render the Current Scan panel, which resets on every new scan."""
+    panel_html = _build_current_scan_panel_html(analyzed_results)
+    if panel_html:
+        streamlit_target.markdown(panel_html, unsafe_allow_html=True)
 
 
 def _render_live_status_strip(streamlit_target: Any, history_records: list[dict[str, Any]]) -> None:
@@ -2149,6 +2338,34 @@ def main() -> None:
     status_strip_placeholder = streamlit_module.empty()
     dashboard_client_id = _streamlit_query_param_client_id(streamlit_module)
 
+    # A client id is only present when the dashboard was opened from the browser
+    # extension. In that case the user has just scanned one file and wants to see
+    # that result, not a history of everything they have ever scanned. The scan
+    # is still recorded by the API for audit purposes, but only the most recent
+    # one is shown, and it stays scoped to this client.
+    if dashboard_client_id:
+        extension_history_records = _load_dashboard_history_records_for_client(
+            client_id=dashboard_client_id,
+        )
+        latest_record = _latest_history_record(extension_history_records)
+
+        if latest_record is None:
+            streamlit_module.info(
+                "No scan found for this session yet. Scan a PDF from the extension, "
+                "then reopen the dashboard."
+            )
+        else:
+            streamlit_module.markdown(
+                _build_current_scan_panel_html_from_record(latest_record),
+                unsafe_allow_html=True,
+            )
+
+        streamlit_module.caption(
+            "Showing only your most recent extension scan. Open the dashboard "
+            "directly to upload files and review the full scan history."
+        )
+        return
+
     with _get_card_container(streamlit_module):
         streamlit_module.subheader("Upload PDFs")
         streamlit_module.caption(
@@ -2292,6 +2509,12 @@ def main() -> None:
 
     stored_signature = session_state.get("analysis_signature", [])
     analyzed_results = session_state.get("analysis_results", [])
+
+    # The Current Scan panel shows only the scan just performed. It is rebuilt
+    # from the current session results on every run, so a new scan replaces the
+    # previous one while the persistent history below remains intact.
+    if analyzed_results and stored_signature == current_signature:
+        _render_current_scan_panel(streamlit_module, analyzed_results)
 
     if not uploads:
         streamlit_module.info(
