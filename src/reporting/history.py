@@ -35,7 +35,10 @@ def build_scan_history_records(
                 "final_label": str(summary.get("final_label", "unknown")),
                 "final_confidence": _safe_float(summary.get("final_confidence", 0.0)),
                 "rule_score": _safe_float(summary.get("rule_score", 0.0)),
+                "rule_severity": str(summary.get("rule_severity", "low")),
                 "parsed": _derive_parsed_flag(summary),
+                "triggered_rules": _coerce_string_list(summary.get("triggered_rules")),
+                "explanations": _coerce_string_list(summary.get("explanations")),
                 "recommendation": str(analysis_result.get("recommendation", "")),
             }
         )
@@ -180,7 +183,10 @@ def _normalize_history_record(record: dict[str, Any]) -> dict[str, Any]:
         "final_label": final_label if final_label in ALLOWED_VERDICTS else "unknown",
         "final_confidence": _safe_float(record.get("final_confidence", 0.0)),
         "rule_score": _safe_float(record.get("rule_score", 0.0)),
+        "rule_severity": str(record.get("rule_severity", "low")),
         "parsed": _coerce_optional_bool(record.get("parsed")),
+        "triggered_rules": _coerce_string_list(record.get("triggered_rules")),
+        "explanations": _coerce_string_list(record.get("explanations")),
         "recommendation": str(record.get("recommendation", "")),
     }
 
@@ -230,6 +236,13 @@ def _derive_parsed_flag(summary: dict[str, Any]) -> bool:
     return not any(
         MALFORMED_STRUCTURE_RULE in str(rule).lower() for rule in triggered_rules
     )
+
+
+def _coerce_string_list(value: Any) -> list[str]:
+    """Coerce a stored value into a clean list of strings."""
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
 def _coerce_optional_bool(value: Any) -> bool | None:

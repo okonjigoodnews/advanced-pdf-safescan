@@ -58,7 +58,10 @@ class ScanHistoryTestCase(unittest.TestCase):
                     "final_label": "suspicious",
                     "final_confidence": 0.71,
                     "rule_score": 56.0,
+                    "rule_severity": "low",
                     "parsed": True,
+                    "triggered_rules": [],
+                    "explanations": [],
                     "recommendation": "Open with caution.",
                 }
             ],
@@ -218,6 +221,69 @@ class ScanHistoryTestCase(unittest.TestCase):
 
         self.assertTrue(records[0]["parsed"])
         self.assertFalse(records[1]["parsed"])
+
+    def test_build_scan_history_records_stores_verdict_reasons(self) -> None:
+        """Triggered rules, explanations and rule severity are stored for later display."""
+        analyzed_results = [
+            (
+                "pdf_a",
+                {
+                    "summary": {
+                        "file_name": "evil.pdf",
+                        "final_label": "suspicious",
+                        "final_confidence": 0.9,
+                        "rule_score": 85.0,
+                        "rule_severity": "critical",
+                        "triggered_rules": ["malformed-pdf-structure"],
+                        "explanations": ["[critical] malformed-pdf-structure: unreadable."],
+                    },
+                    "sha256": "evil1",
+                    "recommendation": "Open with caution.",
+                    "report_timestamp": "2026-03-26T12:00:00+00:00",
+                },
+            )
+        ]
+
+        records = build_scan_history_records(analyzed_results)
+
+        self.assertEqual(records[0]["rule_severity"], "critical")
+        self.assertEqual(records[0]["triggered_rules"], ["malformed-pdf-structure"])
+        self.assertEqual(
+            records[0]["explanations"],
+            ["[critical] malformed-pdf-structure: unreadable."],
+        )
+
+    def test_load_scan_history_defaults_missing_reasons_to_empty(self) -> None:
+        """Older records without reasons load cleanly rather than raising."""
+        import json
+
+        history_path = PROJECT_ROOT / "tests" / "_history_no_reasons.json"
+        history_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "timestamp": "2026-03-01T10:00:00+00:00",
+                        "file_name": "legacy.pdf",
+                        "sha256": "old1",
+                        "final_label": "benign",
+                        "final_confidence": 1.0,
+                        "rule_score": 0.0,
+                        "recommendation": "Safe to open.",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        try:
+            loaded_records = load_scan_history(history_path=history_path)
+        finally:
+            if history_path.exists():
+                history_path.unlink()
+
+        self.assertEqual(loaded_records[0]["triggered_rules"], [])
+        self.assertEqual(loaded_records[0]["explanations"], [])
+        self.assertEqual(loaded_records[0]["rule_severity"], "low")
 
     def test_compute_parse_coverage_reports_expected_ratio(self) -> None:
         """Coverage counts readable and unreadable files and returns the ratio."""

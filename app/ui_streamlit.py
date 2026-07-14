@@ -1027,62 +1027,25 @@ def _latest_history_record(
 
 
 def _build_current_scan_panel_html_from_record(record: dict[str, Any]) -> str:
-    """Build the Current Scan panel from a single stored history record.
-
-    This is used when the dashboard is opened from the browser extension, where
-    the scan was performed by the API rather than in this session.
-    """
-    verdict_colors = {
-        "benign": ("#22C55E", "rgba(34,197,94,0.12)"),
-        "suspicious": ("#F59E0B", "rgba(245,158,11,0.12)"),
-        "malicious": ("#E5484D", "rgba(229,72,77,0.12)"),
-    }
-
-    final_label = str(record.get("final_label", "unknown")).lower()
-    accent_color, background_color = verdict_colors.get(
-        final_label, ("#64748B", "rgba(100,116,139,0.12)")
+    """Build the Current Scan panel from a stored record, for the extension view."""
+    card = _build_verdict_card_html(
+        final_label=str(record.get("final_label", "unknown")),
+        file_name=str(record.get("file_name", "unknown")),
+        confidence=_safe_float(record.get("final_confidence", 0.0)),
+        rule_score=_safe_float(record.get("rule_score", 0.0)),
+        rule_severity=str(record.get("rule_severity", "low")),
+        parsed_flag=record.get("parsed"),
+        sha256=str(record.get("sha256", "")),
+        explanations=record.get("explanations", []),
+        triggered_rules=record.get("triggered_rules", []),
+        recommendation=str(record.get("recommendation", "")),
+        show_hash=True,
     )
-
-    parsed_flag = record.get("parsed")
-    if parsed_flag is False:
-        readable_label = "Unreadable, treated as suspicious"
-    elif parsed_flag is True:
-        readable_label = "Readable"
-    else:
-        readable_label = ""
-
-    file_name = html.escape(str(record.get("file_name", "unknown")))
-    sha256 = html.escape(str(record.get("sha256", ""))[:16])
-    confidence = _safe_float(record.get("final_confidence", 0.0))
-    rule_score = _safe_float(record.get("rule_score", 0.0))
-    recommendation = html.escape(str(record.get("recommendation", "")))
-
-    readable_html = (
-        f"<div style=\"font-size:12px;color:#9AA8C0;margin-top:4px;\">{readable_label}</div>"
-        if readable_label
-        else ""
+    return _build_current_scan_shell_html(
+        "Current Scan",
+        "Scanned from the browser extension",
+        card,
     )
-
-    return (
-        "<div style=\"margin:18px 0 8px 0;padding:16px 18px;border-radius:12px;"
-        "background:rgba(30,39,97,0.35);border:1px solid rgba(60,76,144,0.6);\">"
-        "<div style=\"font-size:11px;font-weight:700;letter-spacing:2px;"
-        "color:#CADCFC;text-transform:uppercase;\">Current Scan</div>"
-        "<div style=\"font-size:13px;color:#9AA8C0;margin:4px 0 12px 0;\">"
-        "Scanned from the browser extension</div>"
-        "<div style=\"padding:14px 16px;border-radius:10px;"
-        f"background:{background_color};border:1px solid {accent_color};\">"
-        f"<div style=\"font-weight:700;color:{accent_color};text-transform:uppercase;"
-        f"letter-spacing:1px;font-size:11px;\">{html.escape(final_label)}</div>"
-        f"<div style=\"font-size:15px;font-weight:600;margin:6px 0;color:#E6ECF5;"
-        f"word-break:break-all;\">{file_name}</div>"
-        f"<div style=\"font-size:12px;color:#9AA8C0;\">Confidence {confidence:.2f}"
-        f" &middot; Rule score {rule_score:.2f} &middot; SHA-256 {sha256}...</div>"
-        f"{readable_html}"
-        f"<div style=\"font-size:12px;color:#C7D2E4;margin-top:8px;\">{recommendation}</div>"
-        "</div></div>"
-    )
-
 
 def _streamlit_query_param_client_id(streamlit_module: Any) -> str:
     """Return the current dashboard client id from Streamlit query params when present."""
@@ -1488,29 +1451,236 @@ def _render_page_header(streamlit_module: Any) -> None:
     streamlit_module.markdown(_build_hero_html(), unsafe_allow_html=True)
 
 
+_VERDICT_THEME = {
+    "benign": {
+        "accent": "#22C55E",
+        "wash": "rgba(34,197,94,0.10)",
+        "glow": "rgba(34,197,94,0.35)",
+        "icon": "&#10003;",
+        "headline": "No threat indicators found",
+    },
+    "suspicious": {
+        "accent": "#F59E0B",
+        "wash": "rgba(245,158,11,0.10)",
+        "glow": "rgba(245,158,11,0.35)",
+        "icon": "&#9888;",
+        "headline": "Caution advised",
+    },
+    "malicious": {
+        "accent": "#E5484D",
+        "wash": "rgba(229,72,77,0.10)",
+        "glow": "rgba(229,72,77,0.35)",
+        "icon": "&#10005;",
+        "headline": "Threat detected",
+    },
+}
+_UNKNOWN_THEME = {
+    "accent": "#64748B",
+    "wash": "rgba(100,116,139,0.10)",
+    "glow": "rgba(100,116,139,0.30)",
+    "icon": "&#63;",
+    "headline": "Verdict unavailable",
+}
+
+
+def _verdict_theme(final_label: str) -> dict[str, str]:
+    """Return the colour theme for a verdict."""
+    return _VERDICT_THEME.get(str(final_label).strip().lower(), _UNKNOWN_THEME)
+
+
+def _build_reason_list_html(explanations: Any, triggered_rules: Any) -> str:
+    """Build the 'Why this verdict' list from stored explanations or rule names."""
+    reasons: list[str] = []
+
+    if isinstance(explanations, (list, tuple)):
+        reasons = [str(item).strip() for item in explanations if str(item).strip()]
+    if not reasons and isinstance(triggered_rules, (list, tuple)):
+        reasons = [str(item).strip() for item in triggered_rules if str(item).strip()]
+
+    if not reasons:
+        return (
+            "<div style=\"font-size:13px;color:#9AA8C0;line-height:1.6;\">"
+            "No rules were triggered. The file showed no structural indicators of "
+            "compromise, and the model assessed it as safe.</div>"
+        )
+
+    severity_colors = {
+        "critical": "#E5484D",
+        "high": "#F97066",
+        "medium": "#F59E0B",
+        "low": "#7C93B8",
+    }
+
+    items: list[str] = []
+    for reason in reasons[:8]:
+        severity_match = re.match(r"^\[(\w+)\]\s*(.*)$", reason)
+        if severity_match:
+            severity = severity_match.group(1).lower()
+            body = severity_match.group(2)
+        else:
+            severity = "low"
+            body = reason
+        chip_color = severity_colors.get(severity, "#7C93B8")
+
+        items.append(
+            "<li style=\"margin:0 0 10px 0;padding:0;list-style:none;display:flex;"
+            "gap:10px;align-items:flex-start;\">"
+            f"<span style=\"flex:0 0 auto;margin-top:2px;padding:2px 8px;border-radius:20px;"
+            f"font-size:10px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;"
+            f"color:{chip_color};border:1px solid {chip_color};\">{html.escape(severity)}</span>"
+            f"<span style=\"font-size:13px;color:#C7D2E4;line-height:1.55;\">"
+            f"{html.escape(body)}</span></li>"
+        )
+
+    return "<ul style=\"margin:0;padding:0;\">" + "".join(items) + "</ul>"
+
+
+def _build_metric_row_html(pairs: list[tuple[str, str]]) -> str:
+    """Build a compact label/value metric row."""
+    cells = [
+        "<div style=\"flex:1;min-width:120px;\">"
+        f"<div style=\"font-size:10px;font-weight:700;letter-spacing:1.2px;"
+        f"text-transform:uppercase;color:#7C93B8;margin-bottom:3px;\">{html.escape(label)}</div>"
+        f"<div style=\"font-size:15px;font-weight:600;color:#E6ECF5;\">{value}</div></div>"
+        for label, value in pairs
+    ]
+    return (
+        "<div style=\"display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 0 0;\">"
+        + "".join(cells)
+        + "</div>"
+    )
+
+
+def _build_hash_html(sha256: str) -> str:
+    """Render the full SHA-256 in a monospace block."""
+    if not sha256:
+        return ""
+    return (
+        "<div style=\"margin-top:14px;\">"
+        "<div style=\"font-size:10px;font-weight:700;letter-spacing:1.2px;"
+        "text-transform:uppercase;color:#7C93B8;margin-bottom:5px;\">SHA-256</div>"
+        "<div style=\"font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
+        "font-size:11.5px;color:#9AE6B4;background:rgba(4,10,24,0.55);padding:9px 11px;"
+        "border-radius:7px;border:1px solid rgba(60,76,144,0.5);word-break:break-all;"
+        f"line-height:1.5;\">{html.escape(sha256)}</div></div>"
+    )
+
+
+def _build_verdict_card_html(
+    *,
+    final_label: str,
+    file_name: str,
+    confidence: float,
+    rule_score: float,
+    rule_severity: str,
+    parsed_flag: Any,
+    sha256: str,
+    explanations: Any,
+    triggered_rules: Any,
+    recommendation: str,
+    show_hash: bool,
+) -> str:
+    """Build one rich verdict card used by both Current Scan panels."""
+    theme = _verdict_theme(final_label)
+    label = str(final_label).strip().lower()
+
+    if parsed_flag is False:
+        readable_value = "<span style=\"color:#F59E0B;\">Unreadable</span>"
+    elif parsed_flag is True:
+        readable_value = "Readable"
+    else:
+        readable_value = "Not recorded"
+
+    # The rule engine's severity describes the rules only. The verdict may be
+    # driven by the model instead, so the two are labelled separately rather
+    # than being conflated into a single misleading "severity".
+    driver = (
+        "Model" if confidence >= 0.5 and _safe_float(rule_score) < 40.0 else "Model and rules"
+    )
+    if label == "benign":
+        driver = "Model and rules"
+
+    metrics = _build_metric_row_html(
+        [
+            ("Confidence", f"{confidence:.2f}"),
+            ("Rule score", f"{_safe_float(rule_score):.2f} / 100"),
+            ("Rule severity", html.escape(str(rule_severity or "low"))),
+            ("Structure", readable_value),
+            ("Verdict driven by", driver),
+        ]
+    )
+
+    hash_html = _build_hash_html(sha256) if show_hash else ""
+
+    recommendation_html = ""
+    if recommendation:
+        recommendation_html = (
+            "<div style=\"margin-top:14px;padding:10px 13px;border-radius:8px;"
+            f"background:{theme['wash']};border-left:3px solid {theme['accent']};\">"
+            "<div style=\"font-size:10px;font-weight:700;letter-spacing:1.2px;"
+            "text-transform:uppercase;color:#7C93B8;margin-bottom:3px;\">Recommended action</div>"
+            f"<div style=\"font-size:13px;color:#E6ECF5;\">{html.escape(recommendation)}</div></div>"
+        )
+
+    return (
+        "<div style=\"flex:1;min-width:330px;padding:18px 20px;border-radius:12px;"
+        f"background:linear-gradient(180deg,{theme['wash']} 0%,rgba(10,16,36,0.6) 100%);"
+        f"border:1px solid {theme['accent']};box-shadow:0 0 22px -8px {theme['glow']};\">"
+        "<div style=\"display:flex;align-items:center;gap:10px;\">"
+        f"<span style=\"display:inline-flex;align-items:center;justify-content:center;"
+        f"width:26px;height:26px;border-radius:50%;background:{theme['accent']};"
+        f"color:#0A1024;font-size:13px;font-weight:800;\">{theme['icon']}</span>"
+        f"<span style=\"font-size:12px;font-weight:800;letter-spacing:1.6px;"
+        f"text-transform:uppercase;color:{theme['accent']};\">{html.escape(label)}</span>"
+        "</div>"
+        f"<div style=\"font-size:17px;font-weight:700;margin:12px 0 2px 0;color:#F2F6FC;"
+        f"word-break:break-all;\">{html.escape(file_name)}</div>"
+        f"<div style=\"font-size:12.5px;color:{theme['accent']};\">{theme['headline']}</div>"
+        f"{metrics}"
+        "<div style=\"margin-top:16px;padding-top:14px;"
+        "border-top:1px solid rgba(60,76,144,0.45);\">"
+        "<div style=\"font-size:10px;font-weight:700;letter-spacing:1.2px;"
+        "text-transform:uppercase;color:#7C93B8;margin-bottom:9px;\">Why this verdict</div>"
+        f"{_build_reason_list_html(explanations, triggered_rules)}"
+        "</div>"
+        f"{recommendation_html}"
+        f"{hash_html}"
+        "</div>"
+    )
+
+
+def _build_current_scan_shell_html(eyebrow: str, subtitle: str, cards_html: str) -> str:
+    """Wrap verdict cards in the Current Scan container."""
+    return (
+        "<div style=\"margin:20px 0 10px 0;padding:20px 22px;border-radius:14px;"
+        "background:linear-gradient(180deg,rgba(30,39,97,0.42) 0%,rgba(10,16,36,0.35) 100%);"
+        "border:1px solid rgba(60,76,144,0.6);\">"
+        "<div style=\"display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;\">"
+        "<span style=\"font-size:11px;font-weight:800;letter-spacing:2.2px;"
+        f"color:#CADCFC;text-transform:uppercase;\">{html.escape(eyebrow)}</span>"
+        "<span style=\"height:1px;flex:1;min-width:40px;"
+        "background:linear-gradient(90deg,rgba(122,162,247,0.5),transparent);\"></span>"
+        "</div>"
+        f"<div style=\"font-size:13px;color:#9AA8C0;margin:6px 0 16px 0;\">"
+        f"{html.escape(subtitle)}</div>"
+        "<div style=\"display:flex;gap:16px;flex-wrap:wrap;\">"
+        + cards_html
+        + "</div></div>"
+    )
+
+
 def _build_current_scan_panel_html(
     analyzed_results: list[tuple[str, dict[str, Any]]],
 ) -> str:
-    """Build the Current Scan panel, showing only the scan just performed."""
+    """Build the Current Scan panel for scans performed in this dashboard session."""
     if not analyzed_results:
         return ""
-
-    verdict_colors = {
-        "benign": ("#22C55E", "rgba(34,197,94,0.12)"),
-        "suspicious": ("#F59E0B", "rgba(245,158,11,0.12)"),
-        "malicious": ("#E5484D", "rgba(229,72,77,0.12)"),
-    }
 
     unreadable_count = 0
     cards: list[str] = []
 
     for _key_prefix, analysis_result in analyzed_results:
         summary = analysis_result.get("summary", {})
-        final_label = str(summary.get("final_label", "unknown")).lower()
-        accent_color, background_color = verdict_colors.get(
-            final_label, ("#64748B", "rgba(100,116,139,0.12)")
-        )
-
         triggered_rules = summary.get("triggered_rules", [])
         is_unreadable = isinstance(triggered_rules, (list, tuple, set)) and any(
             "malformed-pdf-structure" in str(rule).lower() for rule in triggered_rules
@@ -1518,43 +1688,36 @@ def _build_current_scan_panel_html(
         if is_unreadable:
             unreadable_count += 1
 
-        file_name = html.escape(str(summary.get("file_name", "unknown")))
-        confidence = _safe_float(summary.get("final_confidence", 0.0))
-        rule_score = _safe_float(summary.get("rule_score", 0.0))
-        rule_severity = html.escape(str(summary.get("rule_severity", "low")))
-        readable_label = "Unreadable, treated as suspicious" if is_unreadable else "Readable"
-
         cards.append(
-            "<div style=\"flex:1;min-width:220px;padding:14px 16px;border-radius:10px;"
-            f"background:{background_color};border:1px solid {accent_color};\">"
-            f"<div style=\"font-weight:700;color:{accent_color};text-transform:uppercase;"
-            f"letter-spacing:1px;font-size:11px;\">{html.escape(final_label)}</div>"
-            f"<div style=\"font-size:15px;font-weight:600;margin:6px 0;color:#E6ECF5;"
-            f"word-break:break-all;\">{file_name}</div>"
-            f"<div style=\"font-size:12px;color:#9AA8C0;\">Confidence {confidence:.2f}"
-            f" &middot; Rule score {rule_score:.2f} &middot; Severity {rule_severity}</div>"
-            f"<div style=\"font-size:12px;color:#9AA8C0;margin-top:4px;\">{readable_label}</div>"
-            "</div>"
+            _build_verdict_card_html(
+                final_label=str(summary.get("final_label", "unknown")),
+                file_name=str(summary.get("file_name", "unknown")),
+                confidence=_safe_float(summary.get("final_confidence", 0.0)),
+                rule_score=_safe_float(summary.get("rule_score", 0.0)),
+                rule_severity=str(summary.get("rule_severity", "low")),
+                parsed_flag=not is_unreadable,
+                sha256=str(analysis_result.get("sha256", "")),
+                explanations=summary.get("explanations", []),
+                triggered_rules=triggered_rules,
+                recommendation=str(analysis_result.get("recommendation", "")),
+                show_hash=True,
+            )
         )
 
     scanned_count = len(analyzed_results)
     file_word = "file" if scanned_count == 1 else "files"
     coverage_note = (
-        f" &middot; {unreadable_count} could not be parsed"
+        f"{unreadable_count} could not be parsed and was treated as suspicious"
+        if unreadable_count == 1
+        else f"{unreadable_count} could not be parsed and were treated as suspicious"
         if unreadable_count
-        else " &middot; all files parsed successfully"
+        else "all files parsed successfully"
     )
 
-    return (
-        "<div style=\"margin:18px 0 8px 0;padding:16px 18px;border-radius:12px;"
-        "background:rgba(30,39,97,0.35);border:1px solid rgba(60,76,144,0.6);\">"
-        "<div style=\"font-size:11px;font-weight:700;letter-spacing:2px;"
-        "color:#CADCFC;text-transform:uppercase;\">Current Scan</div>"
-        f"<div style=\"font-size:13px;color:#9AA8C0;margin:4px 0 12px 0;\">"
-        f"{scanned_count} {file_word} scanned in this run{coverage_note}</div>"
-        "<div style=\"display:flex;gap:12px;flex-wrap:wrap;\">"
-        + "".join(cards)
-        + "</div></div>"
+    return _build_current_scan_shell_html(
+        "Current Scan",
+        f"{scanned_count} {file_word} scanned in this run \u00b7 {coverage_note}",
+        "".join(cards),
     )
 
 
