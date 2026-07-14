@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.reporting.history import (
     append_scan_history_records,
     build_scan_history_records,
+    compute_parse_coverage,
     filter_scan_history_records,
     get_high_risk_scan_history_records,
     get_malicious_scan_history_records,
@@ -57,6 +58,7 @@ class ScanHistoryTestCase(unittest.TestCase):
                     "final_label": "suspicious",
                     "final_confidence": 0.71,
                     "rule_score": 56.0,
+                    "parsed": True,
                     "recommendation": "Open with caution.",
                 }
             ],
@@ -172,6 +174,105 @@ class ScanHistoryTestCase(unittest.TestCase):
             [record["file_name"] for record in malicious_records],
             ["c.pdf"],
         )
+
+
+    def test_build_scan_history_records_flags_malformed_as_unparseable(self) -> None:
+        """A malformed file is recorded as parsed=False, a readable one as True."""
+        analyzed_results = [
+            (
+                "pdf_clean",
+                {
+                    "summary": {
+                        "file_name": "clean.pdf",
+                        "final_label": "benign",
+                        "final_confidence": 1.0,
+                        "rule_score": 0.0,
+                        "triggered_rules": [],
+                    },
+                    "sha256": "clean1",
+                    "recommendation": "Safe to open.",
+                    "report_timestamp": "2026-03-26T12:00:00+00:00",
+                },
+            ),
+            (
+                "pdf_malformed",
+                {
+                    "summary": {
+                        "file_name": "malformed.pdf",
+                        "final_label": "suspicious",
+                        "final_confidence": 0.9,
+                        "rule_score": 85.0,
+                        "triggered_rules": [
+                            "openaction-with-javascript",
+                            "malformed-pdf-structure",
+                        ],
+                    },
+                    "sha256": "malf1",
+                    "recommendation": "Open with caution.",
+                    "report_timestamp": "2026-03-26T12:01:00+00:00",
+                },
+            ),
+        ]
+
+        records = build_scan_history_records(analyzed_results)
+
+        self.assertTrue(records[0]["parsed"])
+        self.assertFalse(records[1]["parsed"])
+
+    def test_compute_parse_coverage_reports_expected_ratio(self) -> None:
+        """Coverage counts readable and unreadable files and returns the ratio."""
+        history_records = [
+            {"final_label": "benign", "parsed": True},
+            {"final_label": "malicious", "parsed": True},
+            {"final_label": "suspicious", "parsed": False},
+        ]
+
+        coverage = compute_parse_coverage(history_records)
+
+        self.assertEqual(coverage["parsed_count"], 2)
+        self.assertEqual(coverage["unparseable_count"], 1)
+        self.assertEqual(coverage["known_count"], 3)
+        self.assertEqual(coverage["unknown_count"], 0)
+        self.assertAlmostEqual(coverage["coverage_ratio"], 2 / 3)
+
+    def test_compute_parse_coverage_excludes_legacy_records(self) -> None:
+        """Records saved before the parsed field existed do not distort coverage."""
+        legacy_records = [
+            {"final_label": "benign"},
+            {"final_label": "malicious"},
+        ]
+
+        coverage = compute_parse_coverage(legacy_records)
+
+        self.assertEqual(coverage["known_count"], 0)
+        self.assertEqual(coverage["unknown_count"], 2)
+        self.assertIsNone(coverage["coverage_ratio"])
+
+    def test_load_scan_history_defaults_legacy_records_to_unknown(self) -> None:
+        """A record on disk with no parsed field loads as None, not True or False."""
+        import json
+
+        history_path = PROJECT_ROOT / "tests" / "_history_legacy_output.json"
+        legacy_on_disk = [
+            {
+                "timestamp": "2026-03-01T10:00:00+00:00",
+                "file_name": "legacy.pdf",
+                "sha256": "old1",
+                "final_label": "benign",
+                "final_confidence": 1.0,
+                "rule_score": 0.0,
+                "recommendation": "Safe to open.",
+            }
+        ]
+        history_path.write_text(json.dumps(legacy_on_disk), encoding="utf-8")
+
+        try:
+            loaded_records = load_scan_history(history_path=history_path)
+        finally:
+            if history_path.exists():
+                history_path.unlink()
+
+        self.assertIsNone(loaded_records[0]["parsed"])
 
 
 if __name__ == "__main__":

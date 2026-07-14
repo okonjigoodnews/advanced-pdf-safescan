@@ -38,6 +38,7 @@ from src.reporting.forensics import (
 )
 from src.reporting.history import (
     append_scan_history_records,
+    compute_parse_coverage,
     filter_scan_history_records,
     get_high_risk_scan_history_records,
     get_malicious_scan_history_records,
@@ -1005,11 +1006,31 @@ def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[st
     else:
         last_scan_display = latest_timestamp.astimezone().strftime("%Y-%m-%d %H:%M")
 
+    coverage = compute_parse_coverage(history_records)
+    coverage_ratio = coverage["coverage_ratio"]
+    unparseable_count = coverage["unparseable_count"]
+
+    if coverage_ratio is None:
+        coverage_display = "n/a"
+        coverage_meta = "No coverage data recorded yet"
+    else:
+        coverage_display = f"{coverage_ratio * 100:.0f}%"
+        if unparseable_count == 0:
+            coverage_meta = "Every file was readable"
+        elif unparseable_count == 1:
+            coverage_meta = "1 unreadable file, treated as suspicious"
+        else:
+            coverage_meta = (
+                f"{unparseable_count} unreadable files, treated as suspicious"
+            )
+
     return {
         "total_scans": len(history_records),
         "malicious_count": malicious_count,
         "suspicious_count": suspicious_count,
         "last_scan_time": last_scan_display,
+        "parse_coverage": coverage_display,
+        "parse_coverage_meta": coverage_meta,
     }
 
 
@@ -1020,6 +1041,11 @@ def _build_live_status_strip_html(history_records: list[dict[str, Any]]) -> str:
         ("Total Scans", str(summary["total_scans"]), "Persistent scan history"),
         ("Malicious Files", str(summary["malicious_count"]), "High-priority detections"),
         ("Suspicious Files", str(summary["suspicious_count"]), "Files needing caution"),
+        (
+            "Parse Coverage",
+            str(summary["parse_coverage"]),
+            str(summary["parse_coverage_meta"]),
+        ),
         ("Last Scan", str(summary["last_scan_time"]), "Most recent recorded analysis"),
     ]
     return (
