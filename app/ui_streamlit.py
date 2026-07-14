@@ -628,6 +628,13 @@ def _analyze_uploaded_pdf(uploaded_file: Any, classifier: MalwareClassifier) -> 
         results = _run_pipeline(temp_pdf_path, classifier)
         reader_result = _read_pdf_details(temp_pdf_path)
         summary = results["summary"]
+        # The pipeline analyses a temporary copy of the upload, so the summary is
+        # named after that temporary file. Restore the name the user actually
+        # uploaded before anything downstream reads it, so that the dashboard, the
+        # comparison view, the scan history and every export show the real
+        # filename rather than an internal temporary path.
+        upload_name = str(getattr(uploaded_file, "name", "uploaded.pdf"))
+        summary["file_name"] = upload_name
         sha256 = compute_sha256(pdf_bytes)
         file_size = len(pdf_bytes)
         recommendation = recommendation_for_verdict(str(summary.get("final_label", "unknown")))
@@ -647,7 +654,7 @@ def _analyze_uploaded_pdf(uploaded_file: Any, classifier: MalwareClassifier) -> 
             "results": results,
             "reader_result": reader_result,
             "pdf_bytes": pdf_bytes,
-            "upload_name": getattr(uploaded_file, "name", "uploaded.pdf"),
+            "upload_name": upload_name,
             "summary": summary,
             "sha256": sha256,
             "file_size": file_size,
