@@ -8,29 +8,29 @@
   </head>
   <body>
     <main class="popup-shell">
-      <section class="hero-panel">
-        <div class="hero-badge">Browser PDF Protection</div>
-        <h1>Advanced PDFSafeScan</h1>
-        <p>Analyze suspicious PDF links for potential threats before opening them.</p>
-      </section>
-      <section class="status-panel">
-        <div class="status-line">
-          <span class="status-label">Backend</span>
+      <header class="hero-panel">
+        <div class="hero-top">
+          <span class="hero-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+              <path d="M12 2 4 5v6c0 5 3.4 8.4 8 11 4.6-2.6 8-6 8-11V5l-8-3Z"
+                    stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="m8.6 12 2.3 2.3 4.5-4.6" stroke="currentColor"
+                    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
           <span id="backend-status" class="status-pill status-pill-offline">Checking</span>
         </div>
-        <div class="status-line">
-          <span class="status-label">Latest Verdict</span>
-          <span id="latest-verdict-badge" class="verdict-badge verdict-failed">No scans yet</span>
+        <h1>Advanced PDFSafeScan</h1>
+        <p>Know what's inside a PDF before you open it. Every file checked, explained, and judged in under a second.</p>
+      </header>
+
+      <section id="verdict-hero" class="verdict-hero verdict-hero-idle">
+        <div class="verdict-hero-head">
+          <span class="verdict-hero-eyebrow">Latest Verdict</span>
+          <span id="result-state" class="state-chip">Idle</span>
         </div>
-      </section>
-      <section class="result-panel">
-        <div class="result-header">
-          <div>
-            <h2>Latest Scan Result</h2>
-            <p id="result-file" class="muted">Right-click a PDF link or PDF page to scan it.</p>
-          </div>
-          <div id="result-state" class="state-chip">Idle</div>
-        </div>
+        <div id="latest-verdict-badge" class="verdict-badge verdict-failed">No scans yet</div>
+        <p id="result-file" class="result-file muted">Right-click a PDF link or PDF page to scan it.</p>
         <div class="metrics-grid">
           <div class="metric-card">
             <span class="metric-label">Confidence</span>
@@ -45,10 +45,20 @@
           Use the context menu on a PDF link or PDF page, or scan the current PDF page from this popup.
         </p>
       </section>
+
       <section class="button-grid">
-        <button id="scan-current-tab" class="primary-button">Scan Current PDF</button>
+        <button id="scan-current-tab" class="primary-button">
+          <span class="button-glyph" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/>
+              <path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </span>
+          Scan Current PDF
+        </button>
         <button id="open-dashboard" class="secondary-button">Open Dashboard</button>
       </section>
+
       <section class="recent-panel">
         <div class="recent-header">
           <h2>Recent Scans</h2>
