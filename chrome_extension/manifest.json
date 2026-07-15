@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Advanced PDFSafeScan",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Hosted-ready PDF scanning with the Advanced PDFSafeScan API service.",
   "permissions": [
     "contextMenus",
