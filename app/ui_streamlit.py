@@ -1066,6 +1066,7 @@ def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[st
     """Build small top-strip summary values from persistent scan history."""
     malicious_count = 0
     suspicious_count = 0
+    benign_count = 0
     latest_timestamp: datetime | None = None
 
     for record in history_records:
@@ -1074,6 +1075,8 @@ def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[st
             malicious_count += 1
         elif final_label == "suspicious":
             suspicious_count += 1
+        elif final_label == "benign":
+            benign_count += 1
 
         parsed_timestamp = _parse_history_timestamp(str(record.get("timestamp", "")))
         if parsed_timestamp is not None and (
@@ -1108,6 +1111,7 @@ def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[st
         "total_scans": len(history_records),
         "malicious_count": malicious_count,
         "suspicious_count": suspicious_count,
+        "benign_count": benign_count,
         "last_scan_time": last_scan_display,
         "parse_coverage": coverage_display,
         "parse_coverage_meta": coverage_meta,
@@ -1121,6 +1125,7 @@ def _build_live_status_strip_html(history_records: list[dict[str, Any]]) -> str:
         ("Total Scans", str(summary["total_scans"]), "Scan history for this deployment"),
         ("Malicious Files", str(summary["malicious_count"]), "High-priority detections"),
         ("Suspicious Files", str(summary["suspicious_count"]), "Files needing caution"),
+        ("Benign Files", str(summary["benign_count"]), "Cleared as safe"),
         (
             "Parse Coverage",
             str(summary["parse_coverage"]),
