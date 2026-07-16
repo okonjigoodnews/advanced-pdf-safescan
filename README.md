@@ -77,6 +77,7 @@ Stated plainly, because they affect how the headline number should be read.
 - **Dataset provenance.** Training and test data both draw on Contagio, so overlap cannot be fully excluded. Records are de-duplicated by SHA-256 and coverage is reported for this reason.
 - **Static analysis only.** Files are inspected without being executed, so behaviour that only appears when a document is opened is out of scope.
 - **Malformed files are flagged `suspicious`, not `malicious`.** This is deliberate: the system will not assert malice about a file it could not fully inspect. It flags, contains and explains instead of guessing.
+- **Scan history is not durable on the free-tier deployment.** History is written to the deployment's local filesystem, which Render's free tier wipes on every redeploy and idle spin-down. The evaluation results in this project were produced offline on the full corpus and do not depend on the live store; durable history in production would use a persistent disk or a managed database.
 
 ---
 
@@ -109,13 +110,18 @@ PDF  ──►  Parser  ──►  32 structural features  ──►  ┌─ Log
 
 ## Features
 
-- **Chrome extension** — scans PDFs at the browser, before they are opened
-- **Streamlit dashboard** — single-file analysis, two-file comparison, batch review, ZIP intake
-- **Explainable verdicts** — every decision comes with the rules that fired and why
+- **Chrome extension** — scans PDFs at the browser, before they are opened, and shows a verdict-driven popup
+- **Two dashboard modes** — opened from the extension it shows only your most recent scan; opened directly it is a full analyst tool with upload, comparison, batch review and ZIP intake
+- **Explainable verdicts** — every decision lists the rules that fired, the plain-English reasons, and the full SHA-256, with the verdict severity and its driver (model or rules) shown honestly
+- **Current Scan panel** — a per-scan summary that resets on each new scan, with a live status strip counting malicious, suspicious and benign files plus parse coverage
 - **Safe reader** — malicious and suspicious files are contained; full preview requires explicit override
 - **Forensic exports** — forensic report, PDF report, CSV summary
 - **Analyst review** — review status, priority, disposition and notes per file
-- **Persistent scan history** — SHA-256 recorded per scan for provenance
+- **Scan history** — SHA-256 recorded per scan for provenance (see the note on persistence below)
+
+### A note on persistence
+
+The scan history is stored on the deployment's local filesystem. On the current free-tier Render deployment this filesystem is **ephemeral**, so history is reset on every redeploy and after periods of inactivity. This is a deployment limitation, not a design one. The production path is a Render **persistent disk** or a managed database such as Postgres, which would make the history durable across restarts. The interface reflects this honestly, describing the count as "scan history for this deployment" rather than implying permanence.
 
 ---
 
