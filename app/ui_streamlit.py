@@ -541,6 +541,35 @@ def _inject_page_styles(streamlit_module: Any) -> None:
             background-size: 200% 100%;
             animation: accentSweep 10s ease-in-out infinite;
         }
+        /* verdict chips light up only when their count is above zero */
+        .status-chip.is-active.tone-malicious {
+            border-color: rgba(239, 68, 68, 0.55);
+            box-shadow: 0 0 26px -8px rgba(239, 68, 68, 0.7), 0 18px 38px rgba(2, 6, 23, 0.28);
+            background: linear-gradient(180deg, rgba(60, 16, 20, 0.6), rgba(8, 18, 34, 0.94));
+        }
+        .status-chip.is-active.tone-malicious::before {
+            background: #ef4444;
+            animation: none;
+        }
+        .status-chip.is-active.tone-suspicious {
+            border-color: rgba(245, 158, 11, 0.5);
+            box-shadow: 0 0 26px -9px rgba(245, 158, 11, 0.65), 0 18px 38px rgba(2, 6, 23, 0.28);
+            background: linear-gradient(180deg, rgba(60, 42, 12, 0.55), rgba(8, 18, 34, 0.94));
+        }
+        .status-chip.is-active.tone-suspicious::before {
+            background: #f59e0b;
+            animation: none;
+        }
+        .status-chip.is-active.tone-benign {
+            border-color: rgba(34, 197, 94, 0.5);
+            box-shadow: 0 0 24px -10px rgba(34, 197, 94, 0.6), 0 18px 38px rgba(2, 6, 23, 0.28);
+            background: linear-gradient(180deg, rgba(16, 48, 30, 0.5), rgba(8, 18, 34, 0.94));
+        }
+        .status-chip.is-active.tone-benign::before {
+            background: #22c55e;
+            animation: none;
+        }
+        .status-chip.is-active .status-value { color: #ffffff; }
         .status-label {
             font-size: 0.72rem;
             text-transform: uppercase;
@@ -1121,29 +1150,41 @@ def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[st
 def _build_live_status_strip_html(history_records: list[dict[str, Any]]) -> str:
     """Return the live status strip HTML shown near the top of the UI."""
     summary = _build_live_status_summary(history_records)
+
+    malicious = int(summary["malicious_count"])
+    suspicious = int(summary["suspicious_count"])
+    benign = int(summary["benign_count"])
+
+    # Each chip carries a colour tone and whether it is "active". A verdict chip
+    # only lights up when its count is above zero, so a quiet dashboard stays
+    # neutral and colour actually signals that there is something to look at,
+    # rather than lighting up permanently and losing meaning.
     chips = [
-        ("Total Scans", str(summary["total_scans"]), "Scan history for this deployment"),
-        ("Malicious Files", str(summary["malicious_count"]), "High-priority detections"),
-        ("Suspicious Files", str(summary["suspicious_count"]), "Files needing caution"),
-        ("Benign Files", str(summary["benign_count"]), "Cleared as safe"),
-        (
-            "Parse Coverage",
-            str(summary["parse_coverage"]),
-            str(summary["parse_coverage_meta"]),
-        ),
-        ("Last Scan", str(summary["last_scan_time"]), "Most recent recorded analysis"),
+        ("Total Scans", str(summary["total_scans"]),
+         "Scan history for this deployment", "neutral", False),
+        ("Malicious Files", str(malicious),
+         "High-priority detections", "malicious", malicious > 0),
+        ("Suspicious Files", str(suspicious),
+         "Files needing caution", "suspicious", suspicious > 0),
+        ("Benign Files", str(benign),
+         "Cleared as safe", "benign", benign > 0),
+        ("Parse Coverage", str(summary["parse_coverage"]),
+         str(summary["parse_coverage_meta"]), "neutral", False),
+        ("Last Scan", str(summary["last_scan_time"]),
+         "Most recent recorded analysis", "neutral", False),
     ]
+
     return (
         '<section class="status-strip">'
         + "".join(
             (
-                '<div class="status-chip">'
+                f'<div class="status-chip tone-{tone}{" is-active" if active else ""}">'
                 f'<div class="status-label">{html.escape(label)}</div>'
                 f'<div class="status-value">{html.escape(value)}</div>'
                 f'<div class="status-meta">{html.escape(meta)}</div>'
                 "</div>"
             )
-            for label, value, meta in chips
+            for label, value, meta, tone, active in chips
         )
         + "</section>"
     )
