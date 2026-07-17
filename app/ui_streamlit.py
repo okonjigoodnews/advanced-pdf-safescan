@@ -111,6 +111,7 @@ def _inject_page_styles(streamlit_module: Any) -> None:
     streamlit_module.markdown(
         """
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
         :root {
             --app-bg: #07111f;
             --panel-bg: rgba(8, 18, 34, 0.62);
@@ -118,6 +119,9 @@ def _inject_page_styles(streamlit_module: Any) -> None:
             --panel-shadow: 0 24px 60px rgba(2, 6, 23, 0.42);
             --text-main: #eff6ff;
             --text-muted: #93a9c8;
+            --font-ui: 'Inter', 'Segoe UI', 'Helvetica Neue', sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+            --ease: cubic-bezier(0.4, 0, 0.2, 1);
             --accent-blue: #60a5fa;
             --accent-cyan: #22d3ee;
             --accent-purple: #8b5cf6;
@@ -152,6 +156,31 @@ def _inject_page_styles(streamlit_module: Any) -> None:
                 radial-gradient(circle at 60% 82%, rgba(34, 211, 238, 0.08), transparent 28%),
                 linear-gradient(150deg, #010512 0%, #050e1c 40%, #06111f 100%);
             color: var(--text-main);
+        }
+        /* premium typography applied across the whole interface */
+        html, body, .stApp, [data-testid="stAppViewContainer"],
+        [class*="css"], .stMarkdown, p, span, div, label,
+        button, input, textarea, select {
+            font-family: var(--font-ui);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        h1, h2, h3 {
+            font-family: var(--font-ui);
+            letter-spacing: -0.02em;
+            line-height: 1.15;
+        }
+        p, .stMarkdown p, [data-testid="stMarkdownContainer"] p {
+            line-height: 1.6;
+        }
+        /* the hero data reads as figures: monospace-tabular, tight, confident */
+        .status-value, .metric-value {
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.01em;
+        }
+        code, pre, .status-value {
+            font-feature-settings: "tnum" 1, "cv01" 1;
         }
         /* slow, calm aurora that drifts behind everything and never pulls focus */
         .stApp::after {
@@ -267,6 +296,12 @@ def _inject_page_styles(streamlit_module: Any) -> None:
             border-radius: 1.2rem;
             box-shadow: var(--panel-shadow);
             backdrop-filter: blur(18px);
+            transition: transform 0.22s var(--ease), border-color 0.22s var(--ease), box-shadow 0.22s var(--ease);
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+            transform: translateY(-2px);
+            border-color: rgba(96, 165, 250, 0.34) !important;
+            box-shadow: 0 30px 66px rgba(2, 6, 23, 0.5);
         }
         div[data-testid="stVerticalBlockBorderWrapper"]::before {
             content: "";
@@ -276,10 +311,11 @@ def _inject_page_styles(streamlit_module: Any) -> None:
             right: 1rem;
             height: 2px;
             border-radius: 999px;
-            background: linear-gradient(90deg, rgba(34, 211, 238, 0.15), rgba(96, 165, 250, 0.95), rgba(139, 92, 246, 0.18));
+            background: linear-gradient(90deg, rgba(96, 165, 250, 0.08), rgba(96, 165, 250, 0.45), rgba(96, 165, 250, 0.08));
             background-size: 200% 100%;
-            animation: accentSweep 12s ease-in-out infinite;
+            animation: accentSweep 14s ease-in-out infinite;
             pointer-events: none;
+            opacity: 0.7;
         }
         div[data-testid="stVerticalBlockBorderWrapper"] > div {
             border-radius: 1.2rem;
@@ -550,12 +586,17 @@ def _inject_page_styles(streamlit_module: Any) -> None:
         .status-chip {
             position: relative;
             overflow: hidden;
-            padding: 0.85rem 1rem 0.9rem 1rem;
+            padding: 0.9rem 1.05rem 0.95rem 1.05rem;
             border-radius: 1rem;
             background: linear-gradient(180deg, rgba(9, 18, 34, 0.82), rgba(8, 18, 34, 0.94));
             border: 1px solid rgba(96, 165, 250, 0.14);
             box-shadow: 0 18px 38px rgba(2, 6, 23, 0.28);
             backdrop-filter: blur(14px);
+            transition: transform 0.2s var(--ease), border-color 0.2s var(--ease);
+        }
+        .status-chip:hover {
+            transform: translateY(-2px);
+            border-color: rgba(96, 165, 250, 0.3);
         }
         .status-chip::before {
             content: "";
@@ -1634,7 +1675,7 @@ def _build_hash_html(sha256: str) -> str:
         "<div style=\"margin-top:14px;\">"
         "<div style=\"font-size:10px;font-weight:700;letter-spacing:1.2px;"
         "text-transform:uppercase;color:#7C93B8;margin-bottom:5px;\">SHA-256</div>"
-        "<div style=\"font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
+        "<div style=\"font-family:var(--font-mono);"
         "font-size:11.5px;color:#9AE6B4;background:rgba(4,10,24,0.55);padding:9px 11px;"
         "border-radius:7px;border:1px solid rgba(60,76,144,0.5);word-break:break-all;"
         f"line-height:1.5;\">{html.escape(sha256)}</div></div>"
