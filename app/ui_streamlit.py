@@ -126,9 +126,14 @@ def _inject_page_styles(streamlit_module: Any) -> None:
             --danger: #ef4444;
         }
         @keyframes ambientDrift {
-            0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.78; }
-            50% { transform: translate3d(0, -8px, 0) scale(1.02); opacity: 1; }
-            100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.82; }
+            0% { transform: translate3d(0, 0, 0) scale(1.05); }
+            50% { transform: translate3d(3%, -2%, 0) scale(1.12); }
+            100% { transform: translate3d(0, 0, 0) scale(1.05); }
+        }
+        @keyframes auroraHue {
+            0% { opacity: 0.55; }
+            50% { opacity: 0.85; }
+            100% { opacity: 0.55; }
         }
         @keyframes accentSweep {
             0% { background-position: 0% 50%; opacity: 0.62; }
@@ -142,26 +147,49 @@ def _inject_page_styles(streamlit_module: Any) -> None:
         }
         .stApp {
             background:
-                radial-gradient(circle at 15% 20%, rgba(96, 165, 250, 0.22), transparent 28%),
-                radial-gradient(circle at 85% 18%, rgba(139, 92, 246, 0.18), transparent 24%),
-                radial-gradient(circle at 60% 78%, rgba(34, 211, 238, 0.12), transparent 26%),
-                linear-gradient(145deg, #020817 0%, #07111f 38%, #081426 100%);
+                radial-gradient(circle at 15% 20%, rgba(96, 165, 250, 0.14), transparent 30%),
+                radial-gradient(circle at 85% 18%, rgba(139, 92, 246, 0.12), transparent 26%),
+                radial-gradient(circle at 60% 82%, rgba(34, 211, 238, 0.08), transparent 28%),
+                linear-gradient(150deg, #010512 0%, #050e1c 40%, #06111f 100%);
             color: var(--text-main);
+        }
+        /* slow, calm aurora that drifts behind everything and never pulls focus */
+        .stApp::after {
+            content: "";
+            position: fixed;
+            inset: -20%;
+            z-index: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(38% 42% at 22% 28%, rgba(56, 132, 255, 0.20), transparent 70%),
+                radial-gradient(34% 38% at 80% 22%, rgba(139, 92, 246, 0.16), transparent 70%),
+                radial-gradient(46% 46% at 66% 84%, rgba(34, 211, 238, 0.12), transparent 72%);
+            filter: blur(40px);
+            animation: ambientDrift 34s ease-in-out infinite,
+                       auroraHue 18s ease-in-out infinite;
+            will-change: transform, opacity;
         }
         .stApp::before {
             content: "";
             position: fixed;
             inset: 0;
+            z-index: 0;
             pointer-events: none;
             background:
                 linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
             background-size: 140px 140px;
             mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.22), transparent 82%);
-            opacity: 0.35;
+            opacity: 0.3;
         }
+        /* keep all real content above the ambient layers */
+        [data-testid="stAppViewContainer"] .main,
+        [data-testid="stHeader"] { position: relative; z-index: 1; }
         [data-testid="stAppViewContainer"] > .main {
             background: transparent;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .stApp::after { animation: none; }
         }
         [data-testid="stHeader"] {
             background: rgba(2, 8, 23, 0.3);
