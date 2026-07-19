@@ -6,6 +6,7 @@ const PROTECTED_PRODUCTION_CONFIG = Object.freeze({
 
 const USER_PREFERENCE_DEFAULTS = Object.freeze({
   autoScanDownloads: true,
+  autoScanOpenedPdfs: true,
   enableNotifications: true,
   warnOnSuspicious: true,
   autoOpenDashboardForMalicious: false
@@ -28,24 +29,43 @@ const DEFAULT_LOCAL_STATE = {
 const CONTEXT_MENU_SCAN_LINK = "advanced-pdfsafescan-scan-link";
 const CONTEXT_MENU_SCAN_PAGE = "advanced-pdfsafescan-scan-page";
 const MAX_RECENT_SCANS = 8;
+
+// Toolbar badge. The badge gives the verdict at a glance without the user
+// opening the popup, which matters most for downloads scanned automatically
+// in the background.
+const BADGE_STYLES = Object.freeze({
+  safe: { text: "OK", color: "#16A34A" },
+  benign: { text: "OK", color: "#16A34A" },
+  suspicious: { text: "!", color: "#D97706" },
+  malicious: { text: "!", color: "#DC2626" },
+  failed: { text: "?", color: "#64748B" },
+  scanning: { text: "...", color: "#2563EB" }
+});
+
+// A hosted API on a free tier can sleep and take up to a minute to wake, so a
+// single short request is not enough. The first attempt usually wakes it and
+// the retry succeeds.
+const SCAN_REQUEST_TIMEOUT_MS = 45000;
+const SCAN_RETRY_ATTEMPTS = 2;
+const SCAN_RETRY_DELAY_MS = 2000;
+const KEEP_ALIVE_INTERVAL_MS = 20000;
+const OPENED_PDF_RESCAN_WINDOW_MS = 60000;
 const API_TOKEN_HEADER_NAME = "X-API-Token";
 const CLIENT_ID_HEADER_NAME = "X-Client-ID";
 const CLIENT_ID_STORAGE_KEY = "advanced_pdfsafescan_client_id";
-const NOTIFICATION_ICON_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-    <defs>
-      <linearGradient id="shield" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#22d3ee"/>
-        <stop offset="55%" stop-color="#2563eb"/>
-        <stop offset="100%" stop-color="#8b5cf6"/>
-      </linearGradient>
-    </defs>
-    <rect width="128" height="128" rx="28" fill="#04111f"/>
-    <path d="M64 18 101 31v27c0 27-14 42-37 52C41 100 27 85 27 58V31l37-13Z" fill="url(#shield)"/>
-    <path d="M64 31 88 39v19c0 18-8 29-24 38-16-9-24-20-24-38V39l24-8Z" fill="#081426"/>
-    <path d="m52 64 8 8 18-21" fill="none" stroke="#dbeafe" stroke-linecap="round" stroke-linejoin="round" stroke-width="9"/>
-  </svg>
-`)}`;
+// Chrome's notification API only accepts raster images. An inline SVG data
+// URI silently fails with "Unable to download all specified images", so the
+// packaged PNG icon is used instead.
+function getNotificationIconUrl() {
+  if (hasChromeApis && chrome.runtime?.getURL) {
+    try {
+      return chrome.runtime.getURL("icon128.png");
+    } catch (error) {
+      return "icon128.png";
+    }
+  }
+  return "icon128.png";
+}
 
 const hasChromeApis =
   typeof chrome !== "undefined" &&
@@ -57,6 +77,7 @@ if (hasChromeApis && chrome.runtime.onInstalled) {
   chrome.runtime.onInstalled.addListener(async () => {
     await initializeSettings();
     await ensureContextMenus();
+    await restoreBadgeFromStoredResult();
   });
 }
 
@@ -64,6 +85,7 @@ if (hasChromeApis && chrome.runtime.onStartup) {
   chrome.runtime.onStartup.addListener(async () => {
     await initializeSettings();
     await ensureContextMenus();
+    await restoreBadgeFromStoredResult();
   });
 }
 
@@ -86,6 +108,53 @@ if (hasChromeApis && chrome.downloads && chrome.downloads.onChanged) {
     }
     handleCompletedDownload(delta.id);
   });
+}
+
+// A PDF opened directly in the browser never becomes a download, so the
+// downloads listener alone would miss it. Watching tab navigation covers the
+// far more common case of clicking a PDF link and having Chrome render it
+// in its built-in viewer.
+if (hasChromeApis && chrome.tabs && chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status !== "complete") {
+      return;
+    }
+    handleOpenedPdfTab(tab?.url || "");
+  });
+}
+
+// Remembers URLs scanned in this worker session so that a reload, or Chrome
+// firing the event more than once, does not trigger repeat scans.
+const recentlyScannedTabUrls = new Map();
+
+async function handleOpenedPdfTab(url) {
+  const settings = await getSettings();
+  if (!settings.autoScanOpenedPdfs) {
+    return;
+  }
+
+  const candidateUrl = String(url || "").trim();
+  if (!candidateUrl.startsWith("http://") && !candidateUrl.startsWith("https://")) {
+    return;
+  }
+  if (!isPdfUrl(candidateUrl)) {
+    return;
+  }
+
+  const now = Date.now();
+  const lastScannedAt = recentlyScannedTabUrls.get(candidateUrl);
+  if (lastScannedAt && now - lastScannedAt < OPENED_PDF_RESCAN_WINDOW_MS) {
+    return;
+  }
+  recentlyScannedTabUrls.set(candidateUrl, now);
+
+  // Keep the map small; it only exists to suppress duplicates.
+  if (recentlyScannedTabUrls.size > 40) {
+    const oldestKey = recentlyScannedTabUrls.keys().next().value;
+    recentlyScannedTabUrls.delete(oldestKey);
+  }
+
+  await scanPdfUrl(candidateUrl, { trigger: "pdf-opened-in-tab" });
 }
 
 if (hasChromeApis && chrome.runtime.onMessage) {
@@ -186,6 +255,8 @@ function sanitizeUserPreferences(storedSettings = {}) {
   return {
     autoScanDownloads:
       storedSettings.autoScanDownloads ?? USER_PREFERENCE_DEFAULTS.autoScanDownloads,
+    autoScanOpenedPdfs:
+      storedSettings.autoScanOpenedPdfs ?? USER_PREFERENCE_DEFAULTS.autoScanOpenedPdfs,
     enableNotifications:
       storedSettings.enableNotifications ?? USER_PREFERENCE_DEFAULTS.enableNotifications,
     warnOnSuspicious:
@@ -243,16 +314,21 @@ function generateClientId() {
 async function handleCompletedDownload(downloadId) {
   const settings = await getSettings();
   if (!settings.autoScanDownloads) {
+    console.log("[PDFSafeScan] auto-scan is switched off in settings");
     return;
   }
 
   const [downloadItem] = await chrome.downloads.search({ id: downloadId });
-  if (!downloadItem || !isLikelyPdfDownload(downloadItem)) {
+  if (!downloadItem) {
+    return;
+  }
+  if (!isLikelyPdfDownload(downloadItem)) {
     return;
   }
 
   const sourceUrl = getDownloadSourceUrl(downloadItem);
   if (!sourceUrl) {
+    console.log("[PDFSafeScan] no usable http(s) URL for this download");
     const unavailableResult = buildUnavailableDownloadResult(downloadItem);
     await rememberScanResult(unavailableResult);
     await maybeNotify(unavailableResult, settings, { trigger: "download-unavailable" });
@@ -269,27 +345,106 @@ async function scanPdfUrl(url, context = {}) {
   const settings = await getSettings();
   const clientId = await getOrCreateClientId();
 
+  showScanningBadge();
+
+  // Manifest V3 shuts the service worker down after roughly 30 seconds of
+  // inactivity. A hosted API that has gone to sleep can take longer than that
+  // to wake, so a plain fetch dies with the worker and the scan disappears
+  // without success or failure. A keepalive holds the worker open while the
+  // request is in flight, and the request itself is bounded and retried.
+  const keepAlive = startServiceWorkerKeepAlive();
+
   try {
-    const response = await fetch(normalizeBaseUrl(settings.backendBaseUrl) + "/api/scan/url", {
-      method: "POST",
-      headers: buildApiHeaders(settings, clientId, { includeJsonContentType: true }),
-      body: JSON.stringify({ url })
-    });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload.status === "error") {
-      throw new Error(payload.message || "Hosted API request failed.");
-    }
-
+    const payload = await requestUrlScanWithRetry(settings, clientId, url);
     const normalizedResult = normalizeScanResult(payload, url, context);
     await rememberScanResult(normalizedResult);
     await maybeNotify(normalizedResult, settings, context);
     return normalizedResult;
   } catch (error) {
+    console.warn("[PDFSafeScan] scan failed:", error.message || error, "url:", url);
     const failedResult = buildFailedResult(url, error, context);
     await rememberScanResult(failedResult);
     await maybeNotify(failedResult, settings, context);
     return failedResult;
+  } finally {
+    stopServiceWorkerKeepAlive(keepAlive);
+  }
+}
+
+async function requestUrlScanWithRetry(settings, clientId, url) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= SCAN_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        normalizeBaseUrl(settings.backendBaseUrl) + "/api/scan/url",
+        {
+          method: "POST",
+          headers: buildApiHeaders(settings, clientId, { includeJsonContentType: true }),
+          body: JSON.stringify({ url })
+        },
+        SCAN_REQUEST_TIMEOUT_MS
+      );
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.status === "error") {
+        throw new Error(payload.message || "Hosted API request failed.");
+      }
+      return payload;
+    } catch (error) {
+      lastError = error;
+      if (attempt < SCAN_RETRY_ATTEMPTS) {
+        console.log(
+          `[PDFSafeScan] attempt ${attempt} did not complete (${error.message || error}). ` +
+          "The scanner may be waking up. Retrying."
+        );
+        await delay(SCAN_RETRY_DELAY_MS);
+      }
+    }
+  }
+
+  throw lastError || new Error("Hosted API request failed.");
+}
+
+async function fetchWithTimeout(resource, options, timeoutMs) {
+  if (typeof AbortController === "undefined") {
+    return fetch(resource, options);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(resource, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(`The scanner did not respond within ${Math.round(timeoutMs / 1000)} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function startServiceWorkerKeepAlive() {
+  if (!hasChromeApis || !chrome.runtime?.getPlatformInfo) {
+    return null;
+  }
+  // A periodic trivial API call resets the worker's idle timer.
+  return setInterval(() => {
+    try {
+      chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError);
+    } catch (error) {
+      // ignore
+    }
+  }, KEEP_ALIVE_INTERVAL_MS);
+}
+
+function stopServiceWorkerKeepAlive(handle) {
+  if (handle !== null && handle !== undefined) {
+    clearInterval(handle);
   }
 }
 
@@ -344,6 +499,59 @@ async function rememberScanResult(result) {
     latestScanResult: result,
     recentScans
   });
+
+  updateBadgeForVerdict(result.verdictState);
+}
+
+function updateBadgeForVerdict(verdictState) {
+  if (!hasChromeApis || !chrome.action) {
+    return;
+  }
+
+  const style = BADGE_STYLES[String(verdictState || "").toLowerCase()] || BADGE_STYLES.failed;
+
+  try {
+    chrome.action.setBadgeText({ text: style.text });
+    if (chrome.action.setBadgeBackgroundColor) {
+      chrome.action.setBadgeBackgroundColor({ color: style.color });
+    }
+    if (chrome.action.setBadgeTextColor) {
+      chrome.action.setBadgeTextColor({ color: "#FFFFFF" });
+    }
+  } catch (error) {
+    // A badge is cosmetic. Never let it break a scan.
+  }
+}
+
+function showScanningBadge() {
+  updateBadgeForVerdict("scanning");
+}
+
+function clearBadge() {
+  if (!hasChromeApis || !chrome.action || !chrome.action.setBadgeText) {
+    return;
+  }
+  try {
+    chrome.action.setBadgeText({ text: "" });
+  } catch (error) {
+    // ignore
+  }
+}
+
+async function restoreBadgeFromStoredResult() {
+  if (!hasChromeApis || !chrome.storage?.local) {
+    return;
+  }
+  try {
+    const localState = await chrome.storage.local.get(DEFAULT_LOCAL_STATE);
+    if (localState.latestScanResult?.verdictState) {
+      updateBadgeForVerdict(localState.latestScanResult.verdictState);
+    } else {
+      clearBadge();
+    }
+  } catch (error) {
+    // ignore
+  }
 }
 
 async function maybeNotify(result, settings, context) {
@@ -365,7 +573,7 @@ async function maybeNotify(result, settings, context) {
 
   chrome.notifications.create({
     type: "basic",
-    iconUrl: NOTIFICATION_ICON_URL,
+    iconUrl: getNotificationIconUrl(),
     title,
     message,
     priority: result.verdictState === "malicious" ? 2 : 0

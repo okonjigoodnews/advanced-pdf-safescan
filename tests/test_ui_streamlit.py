@@ -523,8 +523,32 @@ class StreamlitUITestCase(unittest.TestCase):
         self.assertIn("Total Scans", strip_html)
         self.assertIn("Malicious Files", strip_html)
         self.assertIn("Suspicious Files", strip_html)
+        self.assertIn("Benign Files", strip_html)
         self.assertIn("Last Scan", strip_html)
-        self.assertIn('class="status-chip"', strip_html)
+        # chips now carry a tone modifier, so match the class prefix rather than
+        # the bare class name
+        self.assertIn('class="status-chip', strip_html)
+
+    def test_status_strip_lights_verdict_chip_only_when_present(self) -> None:
+        """A verdict chip glows only when its count is above zero."""
+        malicious_only = _build_live_status_strip_html(
+            [
+                {
+                    "timestamp": "2026-03-27T09:45:00+00:00",
+                    "final_label": "malicious",
+                    "rule_score": 91.0,
+                }
+            ]
+        )
+        # the malicious chip is active, the others are not
+        self.assertIn("tone-malicious is-active", malicious_only)
+        self.assertNotIn("tone-suspicious is-active", malicious_only)
+        self.assertNotIn("tone-benign is-active", malicious_only)
+
+    def test_status_strip_stays_neutral_when_empty(self) -> None:
+        """With no scans, no verdict chip is lit."""
+        empty_strip = _build_live_status_strip_html([])
+        self.assertNotIn("is-active", empty_strip)
 
     def test_build_history_trend_rows_groups_scans_by_day(self) -> None:
         """Aggregate scan counts and rule score averages by day for history charts."""

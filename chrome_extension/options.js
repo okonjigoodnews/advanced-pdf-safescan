@@ -1,5 +1,6 @@
 const USER_PREFERENCE_DEFAULTS = {
   autoScanDownloads: true,
+  autoScanOpenedPdfs: true,
   enableNotifications: true,
   warnOnSuspicious: true,
   autoOpenDashboardForMalicious: false
@@ -18,6 +19,7 @@ async function loadSettings() {
   const settings = await chrome.storage.sync.get(USER_PREFERENCE_DEFAULTS);
 
   document.getElementById("autoScanDownloads").checked = Boolean(settings.autoScanDownloads);
+  document.getElementById("autoScanOpenedPdfs").checked = Boolean(settings.autoScanOpenedPdfs);
   document.getElementById("enableNotifications").checked = Boolean(settings.enableNotifications);
   document.getElementById("warnOnSuspicious").checked = Boolean(settings.warnOnSuspicious);
   document.getElementById("autoOpenDashboardForMalicious").checked = Boolean(settings.autoOpenDashboardForMalicious);
@@ -28,6 +30,7 @@ async function saveSettings(event) {
 
   const settings = {
     autoScanDownloads: document.getElementById("autoScanDownloads").checked,
+    autoScanOpenedPdfs: document.getElementById("autoScanOpenedPdfs").checked,
     enableNotifications: document.getElementById("enableNotifications").checked,
     warnOnSuspicious: document.getElementById("warnOnSuspicious").checked,
     autoOpenDashboardForMalicious: document.getElementById("autoOpenDashboardForMalicious").checked
