@@ -2698,10 +2698,90 @@ def _render_comparison_overview(
         streamlit_module.info(comparison["comparison_statement"])
 
 
+# --- Progressive Web App head injection ---------------------------------------
+# Streamlit renders its own HTML shell and exposes no hook for the document
+# <head>, and st.markdown will not execute script tags. st.components.v1.html
+# renders a genuine same-origin iframe in which scripts do run, so the manifest
+# link and icon metadata are appended to window.parent.document.head from there.
+# The component has zero height and renders nothing the user can see.
+
+_PWA_HEAD_SNIPPET = """
+<script>
+(function () {
+    try {
+        var head = window.parent.document.head;
+        if (!head) { return; }
+
+        function upsert(selector, build) {
+            var existing = head.querySelector(selector);
+            if (existing) { existing.parentNode.removeChild(existing); }
+            head.appendChild(build());
+        }
+
+        upsert('link[rel="manifest"]', function () {
+            var link = window.parent.document.createElement('link');
+            link.rel = 'manifest';
+            link.href = '/app/static/manifest.json';
+            return link;
+        });
+
+        upsert('link[rel="apple-touch-icon"]', function () {
+            var link = window.parent.document.createElement('link');
+            link.rel = 'apple-touch-icon';
+            link.href = '/app/static/icon-192.png';
+            return link;
+        });
+
+        upsert('meta[name="theme-color"]', function () {
+            var meta = window.parent.document.createElement('meta');
+            meta.name = 'theme-color';
+            meta.content = '#0b1120';
+            return meta;
+        });
+
+        upsert('meta[name="apple-mobile-web-app-capable"]', function () {
+            var meta = window.parent.document.createElement('meta');
+            meta.name = 'apple-mobile-web-app-capable';
+            meta.content = 'yes';
+            return meta;
+        });
+
+        upsert('meta[name="apple-mobile-web-app-status-bar-style"]', function () {
+            var meta = window.parent.document.createElement('meta');
+            meta.name = 'apple-mobile-web-app-status-bar-style';
+            meta.content = 'black-translucent';
+            return meta;
+        });
+    } catch (error) {
+        /* Injection is cosmetic. If the parent document is unreachable the
+           dashboard still works as an ordinary web page. */
+    }
+})();
+</script>
+"""
+
+
+def _inject_pwa_head(streamlit_module: Any) -> None:
+    """Attach PWA manifest and icon metadata to the parent document head.
+
+    Fails silently. Under test the streamlit module is a stand-in without a
+    components API, and a missing home-screen icon should never break a run.
+    """
+    try:
+        components = getattr(streamlit_module, "components", None)
+        html_fn = getattr(getattr(components, "v1", None), "html", None)
+        if html_fn is None:
+            from streamlit.components.v1 import html as html_fn  # type: ignore[no-redef]
+        html_fn(_PWA_HEAD_SNIPPET, height=0)
+    except Exception:
+        return
+
+
 def main() -> None:
     """Run the Streamlit application."""
     streamlit_module = _require_streamlit()
     streamlit_module.set_page_config(page_title="Advanced PDFSafeScan", layout="wide")
+    _inject_pwa_head(streamlit_module)
     _inject_page_styles(streamlit_module)
     _render_page_header(streamlit_module)
     status_strip_placeholder = streamlit_module.empty()
