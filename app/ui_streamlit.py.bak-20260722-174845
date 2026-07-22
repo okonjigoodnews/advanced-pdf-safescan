@@ -59,8 +59,6 @@ from src.reporting.review_notes import (
 )
 from src.reporting.summary import summary_to_json
 from src.reporting.zip_ingest import ZIPIngestError, extract_pdf_uploads_from_zip
-import altair as alt
-import pandas as pd
 
 INLINE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 _HISTORY_API_RECENT_LIMIT = 250
@@ -1218,92 +1216,6 @@ def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[st
     }
 
 
-# --- Mobile rendering helpers -------------------------------------------------
-# Streamlit's built-in st.line_chart / st.bar_chart wrap Vega-Lite and attach a
-# tooltip layer that cannot be switched off. On touch screens the tooltip fires
-# on tap and never receives the pointer-exit event that would dismiss it, so it
-# latches open and overlaps whatever the user scrolls to next. Building the
-# charts explicitly in Altair means only the encodings declared below are
-# attached, and no tooltip is declared.
-
-
-def _mobile_chart_frame(rows: Any) -> Any:
-    """Return a DataFrame for chart rendering, or None when there is nothing to plot."""
-    if rows is None:
-        return None
-    try:
-        frame = pd.DataFrame(rows)
-    except Exception:  # pragma: no cover - defensive, malformed row input
-        return None
-    if frame.empty:
-        return None
-    return frame
-
-
-def _render_bar_chart(streamlit_module: Any, rows: Any, x_field: str, y_field: str) -> None:
-    """Render a tooltip-free bar chart, or nothing when there is no data."""
-    frame = _mobile_chart_frame(rows)
-    if frame is None:
-        return
-    chart = (
-        alt.Chart(frame)
-        .mark_bar()
-        .encode(
-            x=alt.X(f"{x_field}:N", title=x_field),
-            y=alt.Y(f"{y_field}:Q", title=y_field),
-        )
-    )
-    streamlit_module.altair_chart(chart, use_container_width=True)
-
-
-def _render_trend_chart(
-    streamlit_module: Any,
-    rows: Any,
-    y_field: str,
-    min_distinct_dates: int = 3,
-) -> None:
-    """Render a tooltip-free trend line, suppressed until the history spans several days.
-
-    A single day of scan history produces an axis with one tick and no visible
-    line, which reads as a broken chart rather than a sparse one.
-    """
-    frame = _mobile_chart_frame(rows)
-    if frame is None:
-        return
-    if "date" not in frame.columns or frame["date"].nunique() < min_distinct_dates:
-        streamlit_module.caption(
-            "Scan trend appears once activity spans several days."
-        )
-        return
-    chart = (
-        alt.Chart(frame)
-        .mark_line(point=True)
-        .encode(
-            x=alt.X("date:N", title="date"),
-            y=alt.Y(f"{y_field}:Q", title=y_field),
-        )
-    )
-    streamlit_module.altair_chart(chart, use_container_width=True)
-
-
-def _shorten_scan_timestamp(value: Any) -> str:
-    """Compact an ISO-style timestamp so the Last Scan chip fits one mobile line."""
-    text = str(value).strip()
-    if not text or text.lower() in {"none", "nan", "n/a", "-", "never"}:
-        return text
-    candidate = text.replace("T", " ").split("+")[0].split(".")[0].strip()
-    for parse_format, display_format in (
-        ("%Y-%m-%d %H:%M:%S", "%d %b, %H:%M"),
-        ("%Y-%m-%d %H:%M", "%d %b, %H:%M"),
-        ("%Y-%m-%d", "%d %b %Y"),
-    ):
-        try:
-            return datetime.strptime(candidate, parse_format).strftime(display_format)
-        except ValueError:
-            continue
-    return text
-
-
 def _build_live_status_strip_html(history_records: list[dict[str, Any]]) -> str:
     """Return the live status strip HTML shown near the top of the UI."""
     summary = _build_live_status_summary(history_records)
@@ -1327,7 +1239,7 @@ def _build_live_status_strip_html(history_records: list[dict[str, Any]]) -> str:
          "Cleared as safe", "benign", benign > 0),
         ("Parse Coverage", str(summary["parse_coverage"]),
          str(summary["parse_coverage_meta"]), "neutral", False),
-        ("Last Scan", _shorten_scan_timestamp(summary["last_scan_time"]),
+        ("Last Scan", str(summary["last_scan_time"]),
          "Most recent recorded analysis", "neutral", False),
     ]
 
@@ -2447,13 +2359,13 @@ def _render_analytics_dashboard(
         chart_col_1, chart_col_2, chart_col_3 = streamlit_module.columns(3)
         with chart_col_1:
             streamlit_module.caption("Verdict Distribution")
-            _render_bar_chart(streamlit_module, verdict_distribution_rows, "verdict", "count")
+            streamlit_module.bar_chart(verdict_distribution_rows, x="verdict", y="count")
         with chart_col_2:
             streamlit_module.caption("Rule Score Comparison")
-            _render_bar_chart(streamlit_module, score_chart_rows, "file_name", "rule_score")
+            streamlit_module.bar_chart(score_chart_rows, x="file_name", y="rule_score")
         with chart_col_3:
             streamlit_module.caption("Confidence Comparison")
-            _render_bar_chart(streamlit_module, confidence_chart_rows, "file_name", "confidence")
+            streamlit_module.bar_chart(confidence_chart_rows, x="file_name", y="confidence")
 
         streamlit_module.subheader("Analyzed Files Table")
         streamlit_module.dataframe(dashboard_rows, use_container_width=True)
@@ -2517,10 +2429,10 @@ def _render_scan_history_section(
             trend_col_1, trend_col_2 = streamlit_module.columns(2)
             with trend_col_1:
                 streamlit_module.caption("Scans Over Time")
-                _render_trend_chart(streamlit_module, trend_rows, "scan_count")
+                streamlit_module.line_chart(trend_rows, x="date", y="scan_count")
             with trend_col_2:
                 streamlit_module.caption("Average Rule Score Over Time")
-                _render_trend_chart(streamlit_module, trend_rows, "average_rule_score")
+                streamlit_module.line_chart(trend_rows, x="date", y="average_rule_score")
 
         search_col_1, search_col_2 = streamlit_module.columns(2)
         with search_col_1:
