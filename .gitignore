@@ -44,3 +44,5 @@ metrics.txt
 *.bak2
 find_strong_malicious.py
 fix_*.py
+*.bak-*
+*.bak2-*

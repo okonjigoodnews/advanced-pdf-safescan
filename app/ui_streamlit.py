@@ -1251,9 +1251,10 @@ def _render_bar_chart(streamlit_module: Any, rows: Any, x_field: str, y_field: s
         .encode(
             x=alt.X(f"{x_field}:N", title=x_field),
             y=alt.Y(f"{y_field}:Q", title=y_field),
+            tooltip=alt.value(None),
         )
     )
-    streamlit_module.altair_chart(chart, use_container_width=True)
+    streamlit_module.altair_chart(chart, use_container_width=True, theme=None)
 
 
 def _render_trend_chart(
@@ -1281,9 +1282,10 @@ def _render_trend_chart(
         .encode(
             x=alt.X("date:N", title="date"),
             y=alt.Y(f"{y_field}:Q", title=y_field),
+            tooltip=alt.value(None),
         )
     )
-    streamlit_module.altair_chart(chart, use_container_width=True)
+    streamlit_module.altair_chart(chart, use_container_width=True, theme=None)
 
 
 def _shorten_scan_timestamp(value: Any) -> str:
