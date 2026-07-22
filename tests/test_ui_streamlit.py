@@ -1,6 +1,7 @@
 """Tests for the Streamlit UI helper functions."""
 
 from __future__ import annotations
+from datetime import datetime
 
 import json
 import sys
@@ -133,7 +134,14 @@ class StreamlitUITestCase(unittest.TestCase):
 
         rows = _build_batch_summary_rows(analyzed_results)
 
-        self.assertEqual(rows[0]["timestamp"], "2026-03-26T12:00:00+00:00")
+        from zoneinfo import ZoneInfo
+        march_expected = (
+            datetime.fromisoformat("2026-03-26T12:00:00+00:00")
+            .astimezone(ZoneInfo("Europe/London"))
+            .strftime("%d %b %Y, %H:%M")
+        )
+        self.assertEqual(rows[0]["timestamp"], march_expected)
+        self.assertNotIn("+00:00", rows[0]["timestamp"])
         self.assertEqual(rows[0]["file_name"], "sample.pdf")
         self.assertEqual(rows[0]["sha256"], "abc123")
         self.assertEqual(rows[0]["final_label"], "suspicious")
@@ -161,7 +169,14 @@ class StreamlitUITestCase(unittest.TestCase):
 
         rows = _build_dashboard_table_rows(analyzed_results)
 
-        self.assertEqual(rows[0]["timestamp"], "2026-03-26T12:00:00+00:00")
+        from zoneinfo import ZoneInfo
+        march_expected = (
+            datetime.fromisoformat("2026-03-26T12:00:00+00:00")
+            .astimezone(ZoneInfo("Europe/London"))
+            .strftime("%d %b %Y, %H:%M")
+        )
+        self.assertEqual(rows[0]["timestamp"], march_expected)
+        self.assertNotIn("+00:00", rows[0]["timestamp"])
         self.assertEqual(rows[0]["file_name"], "sample.pdf")
         self.assertEqual(rows[0]["sha256"], "abc123")
         self.assertEqual(rows[0]["final_label"], "suspicious")
@@ -185,7 +200,14 @@ class StreamlitUITestCase(unittest.TestCase):
 
         rows = _build_scan_history_table_rows(history_records)
 
-        self.assertEqual(rows[0]["timestamp"], "2026-03-26T12:00:00+00:00")
+        from zoneinfo import ZoneInfo
+        march_expected = (
+            datetime.fromisoformat("2026-03-26T12:00:00+00:00")
+            .astimezone(ZoneInfo("Europe/London"))
+            .strftime("%d %b %Y, %H:%M")
+        )
+        self.assertEqual(rows[0]["timestamp"], march_expected)
+        self.assertNotIn("+00:00", rows[0]["timestamp"])
         self.assertEqual(rows[0]["file_name"], "sample.pdf")
         self.assertEqual(rows[0]["sha256"], "abc123")
         self.assertEqual(rows[0]["final_label"], "Suspicious")

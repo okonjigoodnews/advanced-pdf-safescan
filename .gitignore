@@ -46,3 +46,5 @@ find_strong_malicious.py
 fix_*.py
 *.bak-*
 *.bak2-*
+*.bak-*
+*.py.bak-*

@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "timestamp": "2026-07-22T19:51:43-04:00",
+    "file_name": "malicious_sample.pdf",
+    "sha256": "0001dcb7233c85770732d138fcfe529f611b609de36e719542c1ec5dedbb508d",
+    "client_id": "",
+    "final_label": "malicious",
+    "final_confidence": 0.986,
+    "rule_score": 24.0,
+    "rule_severity": "low",
+    "parsed": true,
+    "triggered_rules": [
+      "openaction-with-javascript",
+      "high-high-risk-keyword-volume"
+    ],
+    "explanations": [
+      "[critical] openaction-with-javascript: OpenAction combined with JavaScript can trigger active content as soon as the document opens.",
+      "[high] high-high-risk-keyword-volume: Multiple high-risk indicators are present at the same time."
+    ],
+    "recommendation": "Do not open. Quarantine or isolate the file and investigate further."
+  }
+]

@@ -809,6 +809,30 @@ def _select_riskiest_file(analyzed_results: list[tuple[str, dict[str, Any]]]) ->
     return str(max(analyzed_results, key=rank)[1]["summary"].get("file_name", "unknown"))
 
 
+
+
+def _csv_fieldnames_utc(rows: list[dict[str, Any]]) -> list[str]:
+    """Column order for CSV export: emit timestamp_utc in place of the localised
+    display timestamp, so the downloaded artefact is unambiguous UTC while the
+    on-screen table stays local. Any row without these keys is handled by the
+    export writer's extrasaction="ignore"."""
+    seen: list[str] = []
+    for row in rows:
+        for key in row.keys():
+            if key == "timestamp":
+                # Replace the localised column with the raw UTC one at the same
+                # position, and never emit the localised value in the export.
+                if "timestamp_utc" not in seen:
+                    seen.append("timestamp_utc")
+                continue
+            if key == "timestamp_utc":
+                if "timestamp_utc" not in seen:
+                    seen.append("timestamp_utc")
+                continue
+            if key not in seen:
+                seen.append(key)
+    return seen
+
 def _build_batch_summary_rows(analyzed_results: list[tuple[str, dict[str, Any]]]) -> list[dict[str, Any]]:
     """Build a simple summary table payload for batch analysis mode."""
     rows: list[dict[str, Any]] = []
@@ -816,7 +840,8 @@ def _build_batch_summary_rows(analyzed_results: list[tuple[str, dict[str, Any]]]
         summary = analysis_result["summary"]
         rows.append(
             {
-                "timestamp": str(analysis_result.get("report_timestamp", "")),
+                "timestamp": _format_display_timestamp(analysis_result.get("report_timestamp", "")),
+                "timestamp_utc": str(analysis_result.get("report_timestamp", "")),
                 "file_name": str(summary.get("file_name", "unknown")),
                 "sha256": str(analysis_result.get("sha256", "")),
                 "final_label": str(summary.get("final_label", "unknown")),
@@ -835,7 +860,8 @@ def _build_dashboard_table_rows(analyzed_results: list[tuple[str, dict[str, Any]
         summary = analysis_result["summary"]
         rows.append(
             {
-                "timestamp": str(analysis_result.get("report_timestamp", "")),
+                "timestamp": _format_display_timestamp(analysis_result.get("report_timestamp", "")),
+                "timestamp_utc": str(analysis_result.get("report_timestamp", "")),
                 "file_name": str(summary.get("file_name", "unknown")),
                 "sha256": str(analysis_result.get("sha256", "")),
                 "final_label": str(summary.get("final_label", "unknown")),
@@ -900,7 +926,8 @@ def _build_scan_history_table_rows(
         )
         rows.append(
             {
-                "timestamp": str(record.get("timestamp", "")),
+                "timestamp": _format_display_timestamp(record.get("timestamp", "")),
+                "timestamp_utc": str(record.get("timestamp", "")),
                 "file_name": str(record.get("file_name", "unknown")),
                 "sha256": sha256,
                 "final_label": str(record.get("final_label", "unknown")).title(),
@@ -938,7 +965,8 @@ def _build_high_risk_table_rows(
         rows.append(
             {
                 "risk_category": risk_category,
-                "timestamp": str(record.get("timestamp", "")),
+                "timestamp": _format_display_timestamp(record.get("timestamp", "")),
+                "timestamp_utc": str(record.get("timestamp", "")),
                 "file_name": str(record.get("file_name", "unknown")),
                 "sha256": sha256,
                 "final_label": str(record.get("final_label", "unknown")).title(),
@@ -1187,7 +1215,7 @@ def _build_live_status_summary(history_records: list[dict[str, Any]]) -> dict[st
     if latest_timestamp is None:
         last_scan_display = "No scans yet"
     else:
-        last_scan_display = latest_timestamp.astimezone().strftime("%Y-%m-%d %H:%M")
+        last_scan_display = _to_display_timezone(latest_timestamp).strftime("%Y-%m-%d %H:%M")
 
     coverage = compute_parse_coverage(history_records)
     coverage_ratio = coverage["coverage_ratio"]
@@ -1286,6 +1314,44 @@ def _render_trend_chart(
         )
     )
     streamlit_module.altair_chart(chart, use_container_width=True, theme=None)
+
+
+_DISPLAY_TIMEZONE = "Europe/London"
+
+
+def _to_display_timezone(moment: datetime) -> datetime:
+    """Convert a parsed timestamp to the dashboard's display timezone.
+
+    A bare .astimezone() converts to the host's local zone, which on Render is
+    UTC, so the dashboard read an hour behind during British Summer Time. Using
+    a named zone rather than a fixed offset means the conversion stays correct
+    across the October clock change without further intervention.
+
+    Timestamps arriving without an offset are treated as UTC, matching how the
+    server writes them.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:  # pragma: no cover - Python < 3.9
+        return moment
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    try:
+        return moment.astimezone(ZoneInfo(_DISPLAY_TIMEZONE))
+    except Exception:  # pragma: no cover - zone database unavailable on host
+        return moment
+
+
+def _format_display_timestamp(value: Any) -> str:
+    """Render a stored timestamp as local time for on-screen tables.
+
+    Returns the original string unchanged when it cannot be parsed, so a
+    malformed record shows its raw value rather than disappearing.
+    """
+    parsed = _parse_history_timestamp(str(value))
+    if parsed is None:
+        return str(value)
+    return _to_display_timezone(parsed).strftime("%d %b %Y, %H:%M")
 
 
 def _shorten_scan_timestamp(value: Any) -> str:
@@ -2364,7 +2430,10 @@ def _render_analysis_panel(
             )
         streamlit_module.download_button(
             label="Download CSV Summary",
-            data=build_csv_export_bytes(single_result_rows),
+            data=build_csv_export_bytes(
+                single_result_rows,
+                fieldnames=_csv_fieldnames_utc(single_result_rows),
+            ),
             file_name=f"{Path(str(summary.get('file_name', 'analysis'))).stem}_summary.csv",
             mime="text/csv",
             key=_widget_key(key_prefix, "download_csv_summary"),
@@ -2461,7 +2530,10 @@ def _render_analytics_dashboard(
         streamlit_module.dataframe(dashboard_rows, use_container_width=True)
         streamlit_module.download_button(
             label="Download Dashboard CSV",
-            data=build_csv_export_bytes(dashboard_rows),
+            data=build_csv_export_bytes(
+                dashboard_rows,
+                fieldnames=_csv_fieldnames_utc(dashboard_rows),
+            ),
             file_name="analysis_dashboard.csv",
             mime="text/csv",
             key="download_dashboard_csv",
@@ -2492,7 +2564,10 @@ def _render_batch_summary(
         streamlit_module.dataframe(rows, use_container_width=True)
         streamlit_module.download_button(
             label="Download Batch Summary CSV",
-            data=build_csv_export_bytes(rows),
+            data=build_csv_export_bytes(
+                rows,
+                fieldnames=_csv_fieldnames_utc(rows),
+            ),
             file_name="batch_results_summary.csv",
             mime="text/csv",
             key="download_batch_summary_csv",
@@ -2777,11 +2852,38 @@ def _inject_pwa_head(streamlit_module: Any) -> None:
         return
 
 
+# --- Streamlit chrome suppression ---------------------------------------------
+# Streamlit renders a running indicator and Stop button in the top right while
+# the script executes, plus a Deploy button and hamburger menu. None of these
+# belong to the dashboard. Hiding them by test ID is the supported approach;
+# the config.toml toolbarMode setting covers the same ground server-side in
+# case these IDs change in a future release.
+
+_CHROME_CSS = """
+<style>
+    [data-testid="stStatusWidget"] { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    [data-testid="stDecoration"] { display: none !important; }
+    .stAppDeployButton { display: none !important; }
+    #MainMenu { visibility: hidden; }
+</style>
+"""
+
+
+def _inject_chrome_css(streamlit_module: Any) -> None:
+    """Hide Streamlit's developer chrome. Fails silently under test doubles."""
+    try:
+        streamlit_module.markdown(_CHROME_CSS, unsafe_allow_html=True)
+    except Exception:
+        return
+
+
 def main() -> None:
     """Run the Streamlit application."""
     streamlit_module = _require_streamlit()
     streamlit_module.set_page_config(page_title="Advanced PDFSafeScan", layout="wide")
     _inject_pwa_head(streamlit_module)
+    _inject_chrome_css(streamlit_module)
     _inject_page_styles(streamlit_module)
     _render_page_header(streamlit_module)
     status_strip_placeholder = streamlit_module.empty()
